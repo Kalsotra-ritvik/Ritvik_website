@@ -1,5 +1,8 @@
 /// <reference lib="webworker" />
-/** Computes Gaussian molecular surfaces off the main thread (see meshes.ts). */
+/**
+ * Computes Gaussian molecular surfaces off the main thread (see meshes.ts).
+ * Bundled separately by scripts/build-worker.mjs into public/workers/.
+ */
 import { computeGaussianSurface, type SurfaceInput } from "./gaussianSurface";
 
 self.onmessage = (e: MessageEvent<{ id: number; input: SurfaceInput }>) => {

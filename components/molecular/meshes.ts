@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { assetUrl } from "@/lib/assets";
 import { computeGaussianSurface, type SurfaceArrays, type SurfaceInput, type SurfaceOptions } from "./gaussianSurface";
 
 export type { SurfaceOptions } from "./gaussianSurface";
@@ -240,6 +241,7 @@ export function surfaceGeometry(a: SurfaceArrays): THREE.BufferGeometry {
 }
 
 let worker: Worker | null = null;
+let workerBroken = false;
 let nextJob = 0;
 const jobs = new Map<number, { resolve: (a: SurfaceArrays) => void; reject: (e: Error) => void }>();
 
@@ -247,12 +249,17 @@ const jobs = new Map<number, { resolve: (a: SurfaceArrays) => void; reject: (e: 
  * Build a Gaussian surface off the main thread when workers are available
  * (falls back to computing in an idle slice otherwise).
  */
+/** Main-thread fallback, run after a short delay so it does not block the current frame. */
+function computeLater(input: SurfaceInput): Promise<SurfaceArrays> {
+  return new Promise((resolve) => setTimeout(() => resolve(computeGaussianSurface(input)), 50));
+}
+
 export function gaussianSurfaceAsync(points: DensityPoint[], opts: SurfaceOptions): Promise<THREE.BufferGeometry> {
   const input = packPoints(points, opts);
-  if (typeof Worker === "undefined") return Promise.resolve(surfaceGeometry(computeGaussianSurface(input)));
+  if (typeof Worker === "undefined" || workerBroken) return computeLater(input).then(surfaceGeometry);
   if (!worker) {
     try {
-      worker = new Worker(new URL("./surfaceWorker.ts", import.meta.url), { type: "module" });
+      worker = new Worker(assetUrl("/workers/surface-worker.js"));
       worker.onmessage = (e: MessageEvent<{ id: number; result?: SurfaceArrays; error?: string }>) => {
         const job = jobs.get(e.data.id);
         if (!job) return;
@@ -260,19 +267,27 @@ export function gaussianSurfaceAsync(points: DensityPoint[], opts: SurfaceOption
         if (e.data.result) job.resolve(e.data.result);
         else job.reject(new Error(e.data.error ?? "Surface worker failed"));
       };
+      // If the worker cannot load (e.g. a host that blocks it), compute on the main thread instead.
       worker.onerror = () => {
+        workerBroken = true;
+        worker = null;
         for (const job of jobs.values()) job.reject(new Error("Surface worker failed"));
         jobs.clear();
       };
     } catch {
-      return Promise.resolve(surfaceGeometry(computeGaussianSurface(input)));
+      workerBroken = true;
+      return computeLater(input).then(surfaceGeometry);
     }
   }
   const id = nextJob++;
+  // Keep a copy: the worker receives the buffers by transfer.
+  const fallback: SurfaceInput = { xyz: input.xyz.slice(), rgb: input.rgb.slice(), weight: input.weight.slice(), opts };
   return new Promise<SurfaceArrays>((resolve, reject) => {
     jobs.set(id, { resolve, reject });
     worker!.postMessage({ id, input }, [input.xyz.buffer, input.rgb.buffer, input.weight.buffer]);
-  }).then(surfaceGeometry);
+  })
+    .catch(() => computeLater(fallback))
+    .then(surfaceGeometry);
 }
 
 /** Rendering cost tier for mesh materials (set by the engine from the device profile). */

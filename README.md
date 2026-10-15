@@ -30,6 +30,7 @@ Without `DATABASE_URL` the public site still works and shows the built-in defaul
 | `npm run test:e2e` | Playwright: builds, seeds `TEST_DATABASE_URL`, creates a throwaway admin, tests login/CRUD/publish/draft privacy |
 | `npm run build` / `npm run start` | Production build / server |
 | `npm run build:structure`, `npm run build:ribosome` | Regenerate the molecular data from the wwPDB files |
+| `npm run build:worker` | Bundle the molecular-surface Web Worker into `public/workers/` (runs automatically before `dev` and `build`) |
 
 > If a production build ever serves stale styles after large edits, run `rm -rf .next` and rebuild.
 
