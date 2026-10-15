@@ -3,7 +3,7 @@ import { createSurface } from "@/components/molecular/surface";
 import { PALETTE, ParticleBuffer, chainColor, color, createParticleMaterial, disposeObject } from "@/lib/engine/materials";
 import { createRandom } from "@/lib/science/random";
 import { sseg } from "@/lib/story/chapters";
-import type { MolecularState } from "@/lib/story/molecularTimeline";
+import { PHASES, type MolecularState } from "@/lib/story/molecularTimeline";
 import type { Gene } from "@/lib/science/gene";
 import { SP_MRNA } from "./transcriptScene";
 import type { World } from "./world";
@@ -180,7 +180,7 @@ export function createTranslationScene(world: World, gene: Gene, totalResidues: 
 
     const c = ms.cycle;
     const f = ms.cycleFraction;
-    const elongating = t >= 3.58;
+    const elongating = t >= PHASES.elongateProtein[0];
     trnas.forEach((r) => r.set(0, 0));
 
     if (!elongating) {

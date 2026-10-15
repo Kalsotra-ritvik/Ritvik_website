@@ -9,16 +9,18 @@ import { createProteinScene, type ProteinScene } from "@/components/scenes/prote
 import { createDust } from "@/components/scenes/dustScene";
 import { buildGene, type Gene } from "@/lib/science/gene";
 import { loadStructure } from "@/lib/science/structure";
-import { molecularState, GENE_LAYOUT, type MolecularState } from "@/lib/story/molecularTimeline";
+import { molecularState, GENE_LAYOUT, PHASES, type MolecularState } from "@/lib/story/molecularTimeline";
 import { sseg, seg } from "@/lib/story/chapters";
 import { story } from "@/lib/story/store";
 import { SCENE_LABELS } from "@/lib/story/labels";
 import { CameraDirector, applyFraming, portraitDistanceScale, vec3, type Shot } from "./camera";
 import { sharedUniforms } from "./materials";
 import type { QualityProfile } from "./quality";
+import type { VisualSettings } from "@/lib/content/schema";
 
 export interface EngineOptions {
   canvas: HTMLCanvasElement;
+  visual: VisualSettings;
   labelsRoot: HTMLElement | null;
   profile: QualityProfile;
   onFailure: () => void;
@@ -413,7 +415,7 @@ export class MolecularEngine {
     this.dust.setDrift(reduced ? 0 : 1);
 
     // Translation read-out for the DOM HUD.
-    const codonIndex = t >= 3.44 && t < 4.02 ? Math.min(this.gene.codons.length - 1, ms.residues) : -1;
+    const codonIndex = t >= PHASES.largeSubunit[0] && t < 4.02 ? Math.min(this.gene.codons.length - 1, ms.residues) : -1;
     if (codonIndex !== s.codonIndex) story.set({ codonIndex });
 
     // Camera
@@ -500,6 +502,13 @@ export class MolecularEngine {
       el.classList.toggle("is-flipped", flip);
       el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
     }
+  }
+
+  /** Apply new visual settings (admin preview or a live content update). */
+  setVisual(visual: VisualSettings) {
+    this.opts.visual = visual;
+    this.needsRender = true;
+    this.updateRunning();
   }
 
   // ---------------------------------------------------------------------------------

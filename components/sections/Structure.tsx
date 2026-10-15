@@ -1,7 +1,8 @@
 import structure from "@/public/data/sglt2-7vsi.json";
-import { experience } from "@/data/profile";
-import { ChapterHeader, ExternalIcon } from "@/components/ui";
+import type { SiteContent } from "@/lib/content/schema";
 import type { StructureData } from "@/lib/science/structure";
+import { Inline, Rich } from "@/components/Markup";
+import { ChapterHeader, ExternalIcon } from "@/components/ui";
 import StructureViewerControls, { ViewerDragSurface } from "./StructureViewerControls";
 
 const THREE_LETTER: Record<string, string> = {
@@ -9,73 +10,77 @@ const THREE_LETTER: Record<string, string> = {
   LEU: "Leu", LYS: "Lys", MET: "Met", PHE: "Phe", PRO: "Pro", SER: "Ser", THR: "Thr", TRP: "Trp", TYR: "Tyr", VAL: "Val",
 };
 
-export default function Structure() {
+export default function Structure({ content, index }: { content: SiteContent; index: string }) {
+  const s = content.science.structure;
   const data = structure as unknown as StructureData;
   const src = data.source;
   const contacts = data.contacts.residues.filter((r) => r.chain === "A");
-  const cdri = experience.find((e) => e.organisation.includes("CDRI"));
+  const featured = content.projects.find((p) => p.featured);
   const helixCount = data.helices.filter((h) => h.chain === "A").length;
+  const interactive = content.visual.enableProteinInteraction;
   return (
     <section id="structure" data-chapter="structure" className="relative min-h-[210vh] py-24 sm:py-32">
-      <ViewerDragSurface />
+      {interactive && <ViewerDragSurface />}
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-[60svh] px-4 sm:px-6 md:gap-[40vh] lg:gap-10 lg:px-8">
         <div className="panel max-w-2xl p-6 sm:p-9">
-          <ChapterHeader index="06" label="Structural biology" title={<>From shape <span className="italic">to insight</span></>}>
-            <p>
-              A structure turns a sequence into testable geometry. In this cryo-EM structure, the inhibitor empagliflozin occupies the
-              sugar-binding site and the external vestibule of SGLT2, holding the transporter in an outward-open state (Niu et al., 2022).
-            </p>
-            <p>
-              Pockets like this are what structure-based screening works with: candidate molecules are docked into the site, ranked, and
-              the most promising complexes are tested for stability with molecular dynamics.
-            </p>
-          </ChapterHeader>
+          <ChapterHeader index={index} label={s.eyebrow} title={s.title} body={s.body} />
         </div>
 
         <div className="flex min-h-[110vh] flex-col justify-end lg:min-h-[90vh] lg:justify-start">
           <div className="sticky bottom-3 z-10 max-w-xl lg:bottom-auto lg:top-24">
-            <StructureViewerControls contactCount={contacts.length} />
+            <StructureViewerControls
+              title={s.viewerTitle}
+              modes={s.modes}
+              defaultMode={content.visual.proteinMode}
+              contactCount={contacts.length}
+              interactive={interactive}
+            />
           </div>
         </div>
 
-        {cdri && (
-          <article data-reveal className="panel max-w-2xl p-6 sm:p-9" aria-labelledby="cdri-title">
-            <p className="eyebrow">Dissertation methods · {cdri.period}</p>
-            <h3 id="cdri-title" className="display mt-3 text-3xl text-mist-100 sm:text-4xl">
-              Screening, simulation, prediction
+        {featured && (featured.contribution.length > 0 || featured.methods.length > 0) && (
+          <article data-reveal className="panel max-w-2xl p-6 sm:p-9" aria-labelledby="methods-title">
+            <p className="eyebrow">
+              {s.methodsEyebrow}
+              {featured.period ? ` · ${featured.period}` : ""}
+            </p>
+            <h3 id="methods-title" className="display mt-3 text-3xl text-mist-100 sm:text-4xl">
+              <Inline text={s.methodsTitle} />
             </h3>
-            <p className="mt-2 text-mist-300">{cdri.organisation}</p>
+            <p className="mt-2 text-mist-300">{featured.context}</p>
             <ol className="mt-6 space-y-4">
-              {cdri.points.map((p, i) => (
+              {(featured.contribution.length ? featured.contribution : featured.methods).map((p, i) => (
                 <li key={p} className="flex gap-4">
-                  <span className="font-mono text-sm text-amber-300">0{i + 1}</span>
+                  <span className="font-mono text-sm text-amber-300">{String(i + 1).padStart(2, "0")}</span>
                   <span className="text-mist-200">{p}</span>
                 </li>
               ))}
             </ol>
-            <p className="note mt-6">
-              The structure shown is a published SGLT2 structure, included for context. The specific targets, compound libraries and results
-              of the dissertation are not shown here.
-            </p>
+            {s.methodsNote && (
+              <p className="note mt-6">
+                <Inline text={s.methodsNote} />
+              </p>
+            )}
           </article>
         )}
 
         <details data-reveal className="panel max-w-2xl p-6 sm:p-7">
-          <summary className="cursor-pointer text-mist-100">About this structure (text description)</summary>
+          <summary className="cursor-pointer text-mist-100">{s.detailsSummary}</summary>
           <div className="mt-4 space-y-3 text-sm leading-relaxed text-mist-200">
             <p>
-              <span className="text-mist-100">{src.title.charAt(0) + src.title.slice(1).toLowerCase().replace("sglt2-map17", "SGLT2–MAP17")}.</span>{" "}
-              Method: {src.method.toLowerCase()}, {src.resolutionAngstrom} Å. Chain A is SGLT2 (UniProt P31639); chain B is MAP17 (Q13113). The
-              entry records {helixCount} helical segments in chain A and no β-sheets.
+              <span className="text-mist-100">Structure of human SGLT2–MAP17 complex bound with empagliflozin.</span> Method:{" "}
+              {src.method.toLowerCase()}, {src.resolutionAngstrom} Å. Chain A is SGLT2 (UniProt P31639); chain B is MAP17 (Q13113). The entry
+              records {helixCount} helical segments in chain A and no β-sheets.
             </p>
             <p>
               Residues of SGLT2 with any heavy atom within {data.contacts.cutoffAngstrom} Å of empagliflozin ({contacts.length}):{" "}
               {contacts.map((c) => `${THREE_LETTER[c.resName] ?? c.resName}${c.resSeq}`).join(", ")}.
             </p>
-            <p className="note">
-              Computed by this site from the deposited coordinates (scripts/build-structure.mjs). A distance cut-off identifies nearby residues;
-              it does not by itself establish specific interactions.
-            </p>
+            {s.detailsNote && (
+              <p className="note">
+                <Inline text={s.detailsNote} />
+              </p>
+            )}
             <p>
               {src.citation.authors}. {src.citation.title}. <em>{src.citation.journal}</em> {src.citation.volume}, {src.citation.pages} (
               {src.citation.year}).{" "}
@@ -87,6 +92,7 @@ export default function Structure() {
                 PDB {src.pdbId} <ExternalIcon />
               </a>
             </p>
+            {s.sceneNote && <Rich text={s.sceneNote} />}
           </div>
         </details>
       </div>

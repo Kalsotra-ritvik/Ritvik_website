@@ -4,7 +4,8 @@
  *  0   DNA double helix (hero)
  *  1   RNA polymerase bound, transcription bubble open
  *  2   Elongation complete, nascent pre-mRNA released
- *  3   Processed mRNA leaves the transcriptome view
+ *  2.85 Processed mRNA leaves the transcriptome view
+ *  3.3  mRNA exported through a nuclear pore into the cytoplasm
  *  4   Ribosome has translated the first codons
  *  5   Polypeptide folded into the SGLT2 structure (PDB 7VSI)
  *  6   Interactive structure view
@@ -18,6 +19,7 @@ export type ChapterId =
   | "about"
   | "foundations"
   | "transcriptome"
+  | "export"
   | "translation"
   | "folding"
   | "structure"
@@ -44,8 +46,9 @@ export const CHAPTERS: readonly Chapter[] = [
   { id: "hero", label: "Home", t: [-0.5, 0.5], rest: 0 },
   { id: "about", label: "About", t: [0.5, 1], rest: 1, nav: true },
   { id: "foundations", label: "Transcription", t: [1, 2], rest: 1.8 },
-  { id: "transcriptome", label: "Transcriptomics", t: [2, 3], rest: 2.7, nav: true },
-  { id: "translation", label: "Translation", t: [3, 4], rest: 3.8 },
+  { id: "transcriptome", label: "Transcriptomics", t: [2, 2.85], rest: 2.7, nav: true },
+  { id: "export", label: "Export", t: [2.85, 3.3], rest: 3.15 },
+  { id: "translation", label: "Translation", t: [3.3, 4], rest: 3.8 },
   { id: "folding", label: "Folding", t: [4, 5], rest: 5 },
   { id: "structure", label: "Structure", t: [5, 6], rest: 5.6, nav: true },
   { id: "projects", label: "Projects", t: [6, 6], rest: 6, opaque: true, nav: true },
@@ -95,11 +98,16 @@ export interface SectionMetrics {
  * a chapter's progress runs from 0 when its top crosses the centre to 1 when its
  * bottom does.
  */
+function byTop(sections: readonly SectionMetrics[]) {
+  return [...sections].sort((a, b) => a.top - b.top);
+}
+
 export function storyTimeAt(scrollY: number, viewportHeight: number, sections: readonly SectionMetrics[]): number {
   if (sections.length === 0) return 0;
   const line = scrollY + viewportHeight * 0.5;
-  let active = sections[0];
-  for (const s of sections) if (line >= s.top) active = s;
+  const sorted = byTop(sections);
+  let active = sorted[0];
+  for (const s of sorted) if (line >= s.top) active = s;
   const chapter = CHAPTERS.find((c) => c.id === active.id);
   if (!chapter) return 0;
   const local = Math.min(1, Math.max(0, (line - active.top) / Math.max(1, active.height)));
@@ -108,7 +116,8 @@ export function storyTimeAt(scrollY: number, viewportHeight: number, sections: r
 
 export function chapterAt(scrollY: number, viewportHeight: number, sections: readonly SectionMetrics[]): Chapter {
   const line = scrollY + viewportHeight * 0.5;
-  let active = sections[0];
-  for (const s of sections) if (line >= s.top) active = s;
+  const sorted = byTop(sections);
+  let active = sorted[0];
+  for (const s of sorted) if (line >= s.top) active = s;
   return CHAPTERS.find((c) => c.id === active?.id) ?? CHAPTERS[0];
 }

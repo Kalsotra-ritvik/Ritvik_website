@@ -10,24 +10,41 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm run lint && npm run test",
-    "build:structure": "node scripts/build-structure.mjs"
+    "build:structure": "node scripts/build-structure.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "db:seed": "tsx scripts/db-seed.ts",
+    "admin:create": "tsx scripts/admin-create.ts",
+    "admin:reset-password": "tsx scripts/admin-reset-password.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.2.1",
+    "aws4fetch": "^1.0.20",
+    "drizzle-orm": "^0.45.3",
+    "file-type": "^22.1.1",
     "gsap": "^3.15.0",
     "next": "16.4.1",
+    "postgres": "^3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "three": "^0.186.1"
+    "server-only": "^0.0.1",
+    "three": "^0.186.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^22.20.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.186.0",
+    "dotenv": "^17.2.3",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.4.1",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5",
     "vitest": "^5.0.4"
   },

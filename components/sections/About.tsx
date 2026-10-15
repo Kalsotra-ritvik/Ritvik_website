@@ -1,38 +1,50 @@
-import { dissertation, education, experience, profile } from "@/data/profile";
+/* eslint-disable @next/next/no-img-element -- media-library images can live on any configured host */
+import type { SiteContent } from "@/lib/content/schema";
+import { resolveAsset } from "@/lib/content/public";
+import { Rich } from "@/components/Markup";
 import { ChapterHeader, SceneNote } from "@/components/ui";
 
-export default function About() {
-  const current = experience.find((e) => e.current);
-  const facts = [
-    { k: "Now", v: current ? `${current.role}, ${current.organisation}` : "" },
-    { k: "Dissertation", v: `${dissertation.institute} · ${dissertation.period}` },
-    { k: "Degree", v: `${education[0].degree}, ${education[0].institution} · ${education[0].period}` },
-    { k: "Aim", v: "PhD in structural bioinformatics" },
-  ];
+export default function About({ content, index }: { content: SiteContent; index: string }) {
+  const { profile, science } = content;
+  const portrait = resolveAsset(profile.profileImage, content.media);
   return (
     <section id="about" data-chapter="about" className="relative min-h-[120vh] py-24 sm:py-32">
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-[60svh] px-4 sm:px-6 md:gap-[40vh] lg:gap-10 lg:px-8">
         <div className="panel max-w-2xl p-6 sm:p-9">
-          <ChapterHeader index="01" label="About" title={<>From sequence <span className="italic">to structure</span></>}>
-            {profile.summary.map((p) => (
-              <p key={p}>{p}</p>
-            ))}
-            <p className="text-mist-100">{profile.goal}</p>
+          {portrait && (
+            <img src={portrait.url} alt={portrait.alt} className="mb-6 h-20 w-20 rounded-full object-cover ring-1 ring-white/15" width={80} height={80} />
+          )}
+          <ChapterHeader index={index} label={science.about.eyebrow} title={science.about.title} body={profile.summary}>
+            {profile.goal && <p className="text-mist-100">{profile.goal}</p>}
           </ChapterHeader>
-          <dl data-reveal className="mt-8 grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-2">
-            {facts.map((f) => (
-              <div key={f.k}>
-                <dt className="note uppercase tracking-[0.14em]">{f.k}</dt>
-                <dd className="mt-1 text-sm leading-relaxed text-mist-100">{f.v}</dd>
-              </div>
-            ))}
-          </dl>
+          {profile.facts.length > 0 && (
+            <dl data-reveal className="mt-8 grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-2">
+              {profile.facts.map((f) => (
+                <div key={f.label + f.value}>
+                  <dt className="note uppercase tracking-[0.14em]">{f.label}</dt>
+                  <dd className="mt-1 text-sm leading-relaxed text-mist-100">{f.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {profile.researchInterests.length > 0 && (
+            <div data-reveal className="mt-6 border-t border-white/10 pt-6">
+              <p className="note uppercase tracking-[0.14em]">Research interests</p>
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {profile.researchInterests.map((r) => (
+                  <li key={r} className="chip">
+                    {r}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
-        <SceneNote>
-          A DNA double helix drawn with B-form proportions (about 10.5 base pairs per turn, with distinct major and minor grooves).
-          RNA polymerase now binds and separates a short stretch of the two strands — the transcription bubble. The base sequence is
-          schematic, not a real gene.
-        </SceneNote>
+        {science.about.sceneNote && (
+          <SceneNote title={science.about.sceneNoteTitle}>
+            <Rich text={science.about.sceneNote} />
+          </SceneNote>
+        )}
       </div>
     </section>
   );

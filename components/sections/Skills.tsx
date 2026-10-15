@@ -1,10 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { skillGroups } from "@/data/profile";
+import type { SkillGroup } from "@/lib/content/schema";
 import { ChapterHeader } from "@/components/ui";
 
-export default function Skills() {
+export default function Skills({
+  groups: allGroups,
+  heading,
+  index,
+}: {
+  groups: SkillGroup[];
+  heading: { eyebrow: string; title: string; intro: string };
+  index: string;
+}) {
+  const skillGroups = useMemo(
+    () =>
+      allGroups
+        .map((g, i) => ({ id: `g${i}`, label: g.label, items: g.items.filter((it) => it.visible).map((it) => it.name) }))
+        .filter((g) => g.items.length),
+    [allGroups],
+  );
   const [group, setGroup] = useState<string>("all");
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
@@ -14,16 +29,14 @@ export default function Skills() {
         .filter((g) => group === "all" || g.id === group)
         .map((g) => ({ ...g, items: g.items.filter((i) => !q || i.toLowerCase().includes(q)) }))
         .filter((g) => g.items.length > 0),
-    [group, q],
+    [group, q, skillGroups],
   );
   const total = groups.reduce((n, g) => n + g.items.length, 0);
 
   return (
     <section id="skills" data-chapter="skills" className="on-light border-t border-umber-900/10 py-24 sm:py-32">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <ChapterHeader index="10" label="Skills" title={<>Methods &amp; tools</>} light>
-          <p>Listed as in the CV, grouped by kind. No proficiency ratings — the projects above show where each was used.</p>
-        </ChapterHeader>
+        <ChapterHeader index={index} label={heading.eyebrow} title={heading.title} body={heading.intro} light />
 
         <div className="mt-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div role="group" aria-label="Filter skills by group" className="flex flex-wrap gap-2">

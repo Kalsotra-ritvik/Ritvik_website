@@ -4,8 +4,9 @@
  * fields they display, so scrolling never re-renders the React tree.
  */
 import type { ChapterId } from "./chapters";
+import type { ProteinMode } from "@/lib/content/schema";
 
-export type ViewerMode = "cartoon" | "trace" | "site";
+export type ViewerMode = ProteinMode;
 
 export interface StoryState {
   /** Target story time from scroll. */

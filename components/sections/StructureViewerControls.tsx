@@ -1,28 +1,42 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { story, type ViewerMode } from "@/lib/story/store";
+import { story } from "@/lib/story/store";
+import type { ProteinMode } from "@/lib/content/schema";
 
-const MODES: { id: ViewerMode; label: string; text: string }[] = [
-  { id: "cartoon", label: "Helices", text: "α-helices smoothed into cylinders and coloured from N-terminus (teal) to C-terminus (amber)." },
-  { id: "trace", label: "Backbone trace", text: "One bead per resolved Cα atom, joined in sequence order." },
-  { id: "site", label: "Binding site", text: "Empagliflozin as bound in the structure; residues with any heavy atom within 4.5 Å of it are highlighted in coral." },
-];
-
+const LABELS: Record<ProteinMode, string> = {
+  cartoon: "Cartoon",
+  trace: "Backbone",
+  surface: "Surface",
+  beads: "Beads",
+  site: "Binding site",
+};
+const ORDER: ProteinMode[] = ["cartoon", "trace", "surface", "beads", "site"];
 const STEP = Math.PI / 12;
 
-export default function StructureViewerControls({ contactCount }: { contactCount: number }) {
-  const [mode, setMode] = useState<ViewerMode>("cartoon");
+export default function StructureViewerControls({
+  title,
+  modes,
+  defaultMode,
+  contactCount,
+  interactive,
+}: {
+  title: string;
+  modes: Record<ProteinMode, string>;
+  defaultMode: ProteinMode;
+  contactCount: number;
+  interactive: boolean;
+}) {
+  const [mode, setMode] = useState<ProteinMode>(defaultMode);
   const [webgl, setWebgl] = useState<"pending" | "ready" | "unavailable">("pending");
 
-  useEffect(
-    () =>
-      story.subscribe((s) => {
-        setMode(s.viewerMode);
-        setWebgl(s.webgl);
-      }),
-    [],
-  );
+  useEffect(() => {
+    story.set({ viewerMode: defaultMode });
+    return story.subscribe((s) => {
+      setMode(s.viewerMode);
+      setWebgl(s.webgl);
+    });
+  }, [defaultMode]);
 
   const rotate = (dYaw: number, dPitch = 0) => {
     const s = story.get();
@@ -38,31 +52,31 @@ export default function StructureViewerControls({ contactCount }: { contactCount
     }
   };
 
-  const active = MODES.find((m) => m.id === mode)!;
   const disabled = webgl === "unavailable";
 
   return (
-      <div className="panel p-5 sm:p-6">
-        <p className="note uppercase tracking-[0.14em] text-teal-400">Explore the structure</p>
-        <div role="radiogroup" aria-label="Representation" className="mt-3 flex flex-wrap gap-1 rounded-full border border-white/10 p-1">
-          {MODES.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              role="radio"
-              aria-checked={mode === m.id}
-              disabled={disabled}
-              onClick={() => story.set({ viewerMode: m.id })}
-              className={`min-h-[40px] flex-1 rounded-full px-3 text-sm whitespace-nowrap ${mode === m.id ? "bg-amber-300 text-ink-900" : "text-mist-300 hover:text-mist-100"} disabled:opacity-50`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-        <p className="mt-3 min-h-[3rem] text-sm leading-relaxed text-mist-200" aria-live="polite">
-          {active.text}
-          {mode === "site" && ` (${contactCount} residues, computed from the deposited coordinates.)`}
-        </p>
+    <div className="panel p-5 sm:p-6">
+      <p className="note uppercase tracking-[0.14em] text-teal-400">{title}</p>
+      <div role="radiogroup" aria-label="Representation" className="mt-3 grid grid-cols-3 gap-1 rounded-2xl border border-white/10 p-1 sm:grid-cols-5">
+        {ORDER.map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={mode === m}
+            disabled={disabled}
+            onClick={() => story.set({ viewerMode: m })}
+            className={`min-h-[40px] rounded-xl px-2 text-sm whitespace-nowrap ${mode === m ? "bg-amber-300 text-ink-900" : "text-mist-300 hover:text-mist-100"} disabled:opacity-50`}
+          >
+            {LABELS[m]}
+          </button>
+        ))}
+      </div>
+      <p className="mt-3 min-h-[4.5rem] text-sm leading-relaxed text-mist-200" aria-live="polite">
+        {modes[mode]}
+        {mode === "site" && ` (${contactCount} residues, computed from the deposited coordinates.)`}
+      </p>
+      {interactive && (
         <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Rotate the model">
           <button type="button" className="btn btn-ghost !min-h-[40px] !px-3 text-sm" onClick={() => rotate(-STEP)} disabled={disabled} aria-label="Rotate left">
             ←
@@ -73,7 +87,7 @@ export default function StructureViewerControls({ contactCount }: { contactCount
           <button
             type="button"
             className="btn btn-ghost !min-h-[40px] !px-3 text-sm"
-            onClick={() => story.set({ viewerYaw: 0, viewerPitch: 0, viewerMode: "cartoon" })}
+            onClick={() => story.set({ viewerYaw: 0, viewerPitch: 0, viewerMode: defaultMode })}
             disabled={disabled}
           >
             Reset
@@ -87,8 +101,9 @@ export default function StructureViewerControls({ contactCount }: { contactCount
             Focus + arrow keys · drag on desktop
           </span>
         </div>
-        {disabled && <p className="note mt-3">3D is unavailable in this browser; the structure details are listed in text below.</p>}
-      </div>
+      )}
+      {disabled && <p className="note mt-3">3D is unavailable in this browser; the structure details are listed in text below.</p>}
+    </div>
   );
 }
 
@@ -107,7 +122,7 @@ export function ViewerDragSurface() {
     if (!drag.current) return;
     const dx = (e.clientX - drag.current.x) / 180;
     const dy = (e.clientY - drag.current.y) / 220;
-    story.set({ viewerYaw: drag.current.yaw + dx, viewerPitch: Math.max(-1.2, Math.min(1.2, drag.current.pitch + (e.pointerType === "mouse" ? dy : 0))) });
+    story.set({ viewerYaw: drag.current.yaw + dx, viewerPitch: Math.max(-1.2, Math.min(1.2, drag.current.pitch + dy)) });
   };
   const onUp = () => {
     drag.current = null;

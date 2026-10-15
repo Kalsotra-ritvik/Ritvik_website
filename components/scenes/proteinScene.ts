@@ -297,8 +297,9 @@ export function createProteinScene(
 
   function update(t: number, ms: MolecularState, target: { mode: ViewerMode; yaw: number; pitch: number }, dt: number, instant: boolean) {
     const k = instant ? 1 : Math.min(1, dt * 4);
-    for (const m of ["cartoon", "trace", "site"] as const) mode[m] += ((target.mode === m ? 1 : 0) - mode[m]) * k;
-    if (Math.abs(mode[target.mode] - 1) < 0.002) for (const m of ["cartoon", "trace", "site"] as const) mode[m] = target.mode === m ? 1 : 0;
+    const want = target.mode === "trace" || target.mode === "site" ? target.mode : "cartoon";
+    for (const m of ["cartoon", "trace", "site"] as const) mode[m] += ((want === m ? 1 : 0) - mode[m]) * k;
+    if (Math.abs(mode[want] - 1) < 0.002) for (const m of ["cartoon", "trace", "site"] as const) mode[m] = want === m ? 1 : 0;
 
     const key = `${ms.residues}|${ms.fold.toFixed(4)}|${mode.cartoon.toFixed(3)}|${mode.trace.toFixed(3)}|${mode.site.toFixed(3)}`;
     if (key !== lastKey) {

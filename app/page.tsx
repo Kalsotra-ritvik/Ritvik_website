@@ -1,42 +1,54 @@
-import Nav from "@/components/Nav";
-import StoryScroll from "@/components/StoryScroll";
-import MolecularStage from "@/components/scenes/MolecularStage";
-import Hero from "@/components/sections/Hero";
-import About from "@/components/sections/About";
-import Foundations from "@/components/sections/Foundations";
-import Transcriptome from "@/components/sections/Transcriptome";
-import Translation from "@/components/sections/Translation";
-import Folding from "@/components/sections/Folding";
-import Structure from "@/components/sections/Structure";
-import Projects from "@/components/sections/Projects";
-import Experience from "@/components/sections/Experience";
-import Skills from "@/components/sections/Skills";
-import Credentials from "@/components/sections/Credentials";
-import Contact from "@/components/sections/Contact";
+import { Suspense } from "react";
+import type { Metadata } from "next";
+import { draftMode } from "next/headers";
+import Portfolio from "@/components/Portfolio";
+import PreviewBanner from "@/components/PreviewBanner";
+import { getDraftContent, getPublishedContent, resolveAsset } from "@/lib/content/public";
+import { getSession } from "@/lib/auth/dal";
 
-export default function Home() {
-  return (
-    <>
-      <a href="#about" className="sr-only z-[60] rounded-md bg-amber-300 px-4 py-2 text-ink-900 focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
-        Skip to content
-      </a>
-      <MolecularStage />
-      <Nav />
-      <main id="content">
-        <Hero />
-        <About />
-        <Foundations />
-        <Transcriptome />
-        <Translation />
-        <Folding />
-        <Structure />
-        <Projects />
-        <Experience />
-        <Skills />
-        <Credentials />
-        <Contact />
-      </main>
-      <StoryScroll />
-    </>
-  );
+export async function generateMetadata(): Promise<Metadata> {
+  const { content } = await getPublishedContent();
+  const { site } = content;
+  const og = resolveAsset(site.ogImage, content.media);
+  const icon = resolveAsset(site.favicon, content.media);
+  return {
+    title: site.title,
+    description: site.description,
+    authors: [{ name: content.profile.name }],
+    openGraph: {
+      title: site.ogTitle || site.title,
+      description: site.ogDescription || site.description,
+      type: "website",
+      ...(og ? { images: [{ url: og.url, alt: og.alt }] } : {}),
+    },
+    ...(icon ? { icons: { icon: icon.url } } : {}),
+    robots: { index: true, follow: true },
+  };
+}
+
+export default async function Home() {
+  const { isEnabled } = await draftMode();
+  if (isEnabled) {
+    return (
+      <Suspense fallback={null}>
+        <DraftOrPublished />
+      </Suspense>
+    );
+  }
+  const { content } = await getPublishedContent();
+  return <Portfolio content={content} />;
+}
+
+/**
+ * Draft preview: only for a signed-in administrator. A stray draft-mode cookie
+ * without a valid admin session just shows the published site.
+ */
+async function DraftOrPublished() {
+  const session = await getSession();
+  if (!session) {
+    const { content } = await getPublishedContent();
+    return <Portfolio content={content} />;
+  }
+  const { content } = await getDraftContent();
+  return <Portfolio content={content} banner={<PreviewBanner />} />;
 }

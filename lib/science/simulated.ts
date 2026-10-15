@@ -72,3 +72,23 @@ export function simulateCoverage(seed = 5): CoverageData {
   ];
   return { exons, depth, junctions, length };
 }
+
+export interface IsoformData {
+  samples: string[];
+  isoforms: { id: string; label: string; exons: number[]; tpm: number[] }[];
+}
+
+/** Two isoforms of one gene: full-length and exon-2-skipping, with condition-dependent use. */
+export function simulateIsoforms(seed = 13): IsoformData {
+  const rng = createRandom(seed);
+  const samples = ["Ctrl 1", "Ctrl 2", "Ctrl 3", "Trt 1", "Trt 2", "Trt 3"];
+  const full = samples.map((_, s) => Math.round((s < 3 ? 42 : 24) + rng.normal() * 3));
+  const skip = samples.map((_, s) => Math.round((s < 3 ? 9 : 27) + rng.normal() * 2.5));
+  return {
+    samples,
+    isoforms: [
+      { id: "T1", label: "Isoform 1 · exons 1–2–3", exons: [1, 2, 3], tpm: full },
+      { id: "T2", label: "Isoform 2 · exon 2 skipped", exons: [1, 3], tpm: skip },
+    ],
+  };
+}

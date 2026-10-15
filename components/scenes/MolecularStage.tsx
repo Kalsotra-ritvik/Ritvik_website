@@ -3,21 +3,28 @@
 import { useEffect, useRef, useState } from "react";
 import { SCENE_LABELS } from "@/lib/story/labels";
 import { story } from "@/lib/story/store";
+import type { Labels, VisualSettings } from "@/lib/content/schema";
 import StaticHelix from "./StaticHelix";
 
 /**
  * Fixed full-viewport WebGL stage behind the page. The engine (and three.js)
- * load in a separate chunk after hydration; until the first frame — or if
- * WebGL is unavailable — a lightweight SVG helix stands in.
+ * load in a separate chunk after the page has loaded; until the first frame —
+ * or if WebGL is unavailable — a lightweight SVG helix stands in.
  */
-export default function MolecularStage() {
+export default function MolecularStage({ visual, labels }: { visual: VisualSettings; labels: Labels }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
+  const engineRef = useRef<{ dispose: () => void; setVisual: (v: VisualSettings) => void } | null>(null);
+  const visualRef = useRef(visual);
   const [status, setStatus] = useState<"pending" | "ready" | "unavailable">("pending");
 
   useEffect(() => {
+    visualRef.current = visual;
+    engineRef.current?.setVisual(visual);
+  }, [visual]);
+
+  useEffect(() => {
     let disposed = false;
-    let engine: { dispose: () => void } | null = null;
     (async () => {
       // Let the page finish loading and the main thread settle before starting 3D.
       if (document.readyState !== "complete") await new Promise((r) => window.addEventListener("load", r, { once: true }));
@@ -36,10 +43,11 @@ export default function MolecularStage() {
       try {
         const { MolecularEngine } = await import("@/lib/engine/Engine");
         if (disposed || !canvasRef.current) return;
-        engine = new MolecularEngine({
+        engineRef.current = new MolecularEngine({
           canvas: canvasRef.current,
           labelsRoot: labelsRef.current,
           profile: detectQuality(),
+          visual: visualRef.current,
           onFailure: () => setStatus("unavailable"),
           onFirstFrame: () => setStatus("ready"),
         });
@@ -51,26 +59,29 @@ export default function MolecularStage() {
     })();
     return () => {
       disposed = true;
-      engine?.dispose();
+      engineRef.current?.dispose();
+      engineRef.current = null;
     };
   }, []);
+
+  const hidden = new Set(visual.showAnnotations ? visual.hiddenAnnotations : SCENE_LABELS.map((l) => l.id));
 
   return (
     <div
       className="stage"
       role="img"
-      aria-label="Animated molecular scene that follows the page: a DNA double helix is transcribed into RNA, the RNA is processed and translated by a ribosome, and the resulting chain folds into the structure of the SGLT2 transporter."
+      aria-label="Animated molecular scene that follows the page: a DNA double helix is transcribed into RNA, the RNA is processed, exported and translated by a ribosome, and the resulting chain folds into the structure of the SGLT2 transporter."
     >
       <div className={`stage-fallback ${status === "ready" ? "is-hidden" : ""}`} aria-hidden="true">
         <StaticHelix />
       </div>
       <canvas ref={canvasRef} className={`stage-canvas ${status === "ready" ? "is-ready" : ""}`} aria-hidden="true" />
       <div ref={labelsRef} className="stage-labels" aria-hidden="true">
-        {SCENE_LABELS.map((l) => (
-          <div key={l.id} data-label={l.id} className={`scene-label ${l.flip ? "is-flipped" : ""} ${l.text.length <= 2 ? "is-site" : ""}`}>
+        {SCENE_LABELS.filter((l) => !hidden.has(l.id) && labels[l.id]).map((l) => (
+          <div key={l.id} data-label={l.id} className={`scene-label ${l.flip ? "is-flipped" : ""} ${l.marker ? "is-site" : ""}`}>
             <span className="scene-label__dot" />
             <span className="scene-label__line" />
-            <span className="scene-label__text">{l.text}</span>
+            <span className="scene-label__text">{labels[l.id]}</span>
           </div>
         ))}
       </div>

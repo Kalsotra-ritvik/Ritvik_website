@@ -9,7 +9,7 @@ import { GENE_LAYOUT } from "@/lib/story/molecularTimeline";
 const gene = buildGene(GENE_LAYOUT.basePairs, GENE_LAYOUT.txStart);
 
 /** Codon → amino acid read-out that follows the ribosome in the 3D scene. */
-export default function CodonTrack() {
+export default function CodonTrack({ note, noteShort }: { note: string; noteShort: string }) {
   const [index, setIndex] = useState(-1);
   const [webgl, setWebgl] = useState<"pending" | "ready" | "unavailable">("pending");
   useEffect(
@@ -62,11 +62,8 @@ export default function CodonTrack() {
       <p className="mt-3 font-mono text-sm tracking-[0.3em] text-mist-100 sm:mt-4" aria-label={`Peptide so far: ${SGLT2_N_TERMINUS.slice(0, Math.max(0, shown + 1))}`}>
         N–{SGLT2_N_TERMINUS.slice(0, Math.max(0, shown + 1)).split("").join("·") || "…"}
       </p>
-      <p className="note mt-3 hidden sm:block">
-        Residues: the first {SGLT2_N_TERMINUS.length} amino acids of human SGLT2 (UniProt P31639). Codons: one valid codon per residue,
-        chosen for display — not the native mRNA sequence.
-      </p>
-      <p className="note mt-2 sm:hidden">First residues of human SGLT2; codons chosen for display.</p>
+      {note && <p className="note mt-3 hidden sm:block">{note}</p>}
+      {noteShort && <p className="note mt-2 sm:hidden">{noteShort}</p>}
     </div>
   );
 }
