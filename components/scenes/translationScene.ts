@@ -7,16 +7,11 @@ import { PHASES, type MolecularState } from "@/lib/story/molecularTimeline";
 import type { Gene } from "@/lib/science/gene";
 import { SP_MRNA } from "./transcriptScene";
 import type { World } from "./world";
-import type { RibosomeModel } from "./ribosomeModel";
 
 /**
- * Ribosome with tRNAs cycling through the
+ * Ribosome (schematic small + large subunit) with tRNAs cycling through the
  * A (aminoacyl), P (peptidyl) and E (exit) sites. One elongation cycle:
  *   aminoacyl-tRNA arrives in A → peptide bond → translocation (A→P, P→E, mRNA moves one codon) → E-site tRNA leaves.
- *
- * The subunits are drawn either as schematic bead shells or, once loaded, as
- * surfaces of the human 80S ribosome model PDB 4UG0 (ribosomeModel.ts). tRNAs
- * and mRNA are schematic in both cases.
  */
 const COMPLEMENT: Record<string, string> = { A: "U", U: "A", G: "C", C: "G" };
 const BASE_RGB: Record<string, number> = { A: PALETTE.baseA, U: PALETTE.baseU, G: PALETTE.baseG, C: PALETTE.baseC };
@@ -138,13 +133,6 @@ export function createTranslationScene(world: World, gene: Gene, totalResidues: 
   large.group.position.copy(largeCenter);
   group.add(small.group, large.group);
 
-  // Deposited-model surfaces replace the schematic shells when available.
-  let model: RibosomeModel | null = null;
-  function useModel(m: RibosomeModel) {
-    model = m;
-    group.add(m.small.group, m.large.group);
-  }
-
   const trnas = [createTRNA(101, quality), createTRNA(202, quality), createTRNA(303, quality)];
   trnas.forEach((r) => group.add(r.group));
 
@@ -184,21 +172,8 @@ export function createTranslationScene(world: World, gene: Gene, totalResidues: 
   function update(t: number, ms: MolecularState) {
     const fadeAll = 1 - sseg(t, 3.98, 4.06);
     const dis = ms.dissociate;
-    if (model) {
-      small.set(0, 0);
-      large.set(0, 0);
-      // Subunits arrive from below/above, join, and separate again after termination.
-      const s = ms.smallSubunit, l = ms.largeSubunit;
-      model.small.set(s, 1 - dis);
-      model.large.set(l, 1 - dis);
-      model.small.group.position.set(0, -(1 - s) * 1.4 - dis * 2.5, -dis * 1.5);
-      model.large.group.position.set(0, (1 - l) * 1.8 + dis * 3, dis * 1.5);
-      // Section plane just behind the mRNA so the tRNA sites and exit tunnel stay in view.
-      model.setCut(world.RIB.z - 0.05 + dis * 1.5);
-    } else {
-      small.set(ms.smallSubunit, 1 - dis);
-      large.set(ms.largeSubunit, 1 - dis);
-    }
+    small.set(ms.smallSubunit, 1 - dis);
+    large.set(ms.largeSubunit, 1 - dis);
     small.group.position.set(0, -0.85 - dis * 2.5, -dis * 1.5);
     large.group.position.copy(largeCenter).add(new THREE.Vector3(0, dis * 3, dis * 1.5));
     group.visible = ms.smallSubunit > 0.001 && dis < 0.999;
@@ -229,13 +204,8 @@ export function createTranslationScene(world: World, gene: Gene, totalResidues: 
     }
 
     group.updateMatrixWorld(true);
-    if (model) {
-      anchors.small.set(-1.9, -1.1, -0.1).add(world.RIB);
-      anchors.large.set(-1.7, 3.0, -0.1).add(world.RIB);
-    } else {
-      anchors.small.set(-1.6, -1.2, 1.2).add(world.RIB);
-      anchors.large.set(-1.8, 3.1, 1.2).add(world.RIB);
-    }
+    anchors.small.set(-1.6, -1.2, 1.2).add(world.RIB);
+    anchors.large.set(-1.8, 3.1, 1.2).add(world.RIB);
     anchors.siteA.set(SITE.A, MRNA_Y - 0.2, 0.4).add(world.RIB);
     anchors.siteP.set(SITE.P, MRNA_Y - 0.2, 0.4).add(world.RIB);
     anchors.siteE.set(SITE.E, MRNA_Y - 0.2, 0.4).add(world.RIB);
@@ -249,12 +219,9 @@ export function createTranslationScene(world: World, gene: Gene, totalResidues: 
     ptcWorld,
     tunnelExitWorld,
     update,
-    useModel,
     dispose() {
       small.dispose();
       large.dispose();
-      model?.small.dispose();
-      model?.large.dispose();
       trnas.forEach((r) => r.dispose());
     },
   };

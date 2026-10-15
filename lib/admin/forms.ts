@@ -7,10 +7,8 @@ import {
   ACCENTS,
   CAMERA_PRESETS,
   CREDENTIAL_KINDS,
-  DNA_STYLES,
   DOCUMENT_SECTIONS,
   LABEL_IDS,
-  LIGHTING_PRESETS,
   PROJECT_STATUSES,
   PROTEIN_MODES,
   STORY_SECTIONS,
@@ -201,6 +199,7 @@ export const FORMS: Record<CollectionName, FormSection[]> = {
             { kind: "textarea", name: "attribution", label: "Data attribution and disclaimers", rows: 5, markup: "rich", help: RICH_HELP },
             { kind: "text", name: "builtWith", label: "Built-with line" },
             { kind: "text", name: "copyright", label: "Copyright line" },
+            { kind: "text", name: "adminLink", label: "Admin login link text", help: "Leave empty to hide the link. The admin is protected by its login either way." },
           ],
         },
       ],
@@ -407,18 +406,14 @@ export const FORMS: Record<CollectionName, FormSection[]> = {
 
   visual: [
     {
-      title: "Molecular representations",
+      title: "Structure viewer",
       fields: [
-        { kind: "select", name: "dnaStyle", label: "DNA", options: opts(DNA_STYLES, { smooth: "Smooth (tubes and base-pair slabs)", hybrid: "Smooth with fine particle detail", beads: "Beads (original particle style)" }) },
-        { kind: "select", name: "rnaStyle", label: "RNA", options: opts(["smooth", "beads"] as const, { smooth: "Smooth tube", beads: "Beads" }) },
-        { kind: "select", name: "ribosomeStyle", label: "Ribosome", options: opts(["surface", "beads"] as const, { surface: "Surface from the structural model (PDB 4UG0)", beads: "Schematic beads" }), help: "If you choose schematic beads, also update the translation scene note under Scientific text, which describes the deposited model." },
-        { kind: "select", name: "proteinMode", label: "Default protein view", options: opts(PROTEIN_MODES, { cartoon: "Cartoon", trace: "Backbone", surface: "Surface", beads: "Beads", site: "Binding site" }) },
+        { kind: "select", name: "proteinMode", label: "Default protein view", options: opts(PROTEIN_MODES, { cartoon: "Helices", trace: "Backbone trace", site: "Binding site" }) },
       ],
     },
     {
-      title: "Lighting & camera",
+      title: "Camera & glow",
       fields: [
-        { kind: "select", name: "lighting", label: "Lighting preset", options: opts(LIGHTING_PRESETS, { studio: "Studio (neutral)", deep: "Deep (higher contrast)", warm: "Warm" }) },
         { kind: "select", name: "cameraPreset", label: "Camera framing", options: opts(CAMERA_PRESETS, { cinematic: "Cinematic (default)", close: "Closer", wide: "Wider" }) },
         { kind: "slider", name: "bloom", label: "Glow", min: 0, max: 1, step: 0.05, help: "Strength of the soft glow highlights (base-pair nodes, 5′ cap, ligand)." },
       ],
@@ -428,7 +423,7 @@ export const FORMS: Record<CollectionName, FormSection[]> = {
       fields: [
         { kind: "slider", name: "motionIntensity", label: "Ambient motion", min: 0, max: 1, step: 0.05, help: "Idle rotation, drift and pointer parallax. Visitors who prefer reduced motion always get none." },
         { kind: "slider", name: "transitionSpeed", label: "Scroll response speed", min: 0.5, max: 2, step: 0.05, unit: "×" },
-        { kind: "slider", name: "particleDensity", label: "Particle density", min: 0.4, max: 1.5, step: 0.05, unit: "×", help: "Applies to particle-based styles and ambient dust." },
+        { kind: "slider", name: "particleDensity", label: "Particle density", min: 0.4, max: 1.5, step: 0.05, unit: "×", help: "Number of ambient particles drifting through the scenes." },
       ],
     },
     {
@@ -460,8 +455,7 @@ export const FORMS: Record<CollectionName, FormSection[]> = {
             { kind: "color", name: "dnaCoding", label: "DNA coding strand" },
             { kind: "color", name: "dnaTemplate", label: "DNA template strand" },
             { kind: "color", name: "rna", label: "RNA (exons of the story transcript)" },
-            { kind: "color", name: "sglt2", label: "SGLT2 (surface)" },
-            { kind: "color", name: "map17", label: "MAP17" },
+            { kind: "color", name: "map17", label: "MAP17 (chain B)" },
             { kind: "color", name: "ligand", label: "Ligand (empagliflozin)" },
           ],
         },
@@ -634,5 +628,5 @@ export const ADMIN_ROUTES: Record<string, AdminRoute> = {
   figures: { route: "figures", collection: "figures", title: "Figures", description: "Captions, axis labels and the simulated-data notice of the transcriptomics figures.", list: false, previewAnchor: "transcriptome" },
   sections: { route: "sections", collection: "sections", title: "Navigation & sections", description: "Top navigation, order and visibility of the portfolio sections, and section headings.", list: false },
   site: { route: "site", collection: "site", title: "Contact, footer & SEO", description: "Website title and description, sharing image, favicon, the contact section and footer text.", list: false, previewAnchor: "contact" },
-  visual: { route: "visual", collection: "visual", title: "Visual settings", description: "Molecular representation styles, lighting, colours, motion and annotations. Every control is limited to safe ranges.", list: false, previewAnchor: "foundations" },
+  visual: { route: "visual", collection: "visual", title: "Visual settings", description: "Default structure view, camera framing, glow, motion, colours and annotations. Every control is limited to safe ranges.", list: false, previewAnchor: "foundations" },
 };

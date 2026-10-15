@@ -35,7 +35,8 @@ describe("content schemas", () => {
     const base = SINGLETON_DEFAULTS.visual;
     expect(visualSchema.safeParse({ ...base, bloom: 5 }).success).toBe(false);
     expect(visualSchema.safeParse({ ...base, colors: { ...base.colors, accent: "red;}" } }).success).toBe(false);
-    expect(visualSchema.safeParse({ ...base, proteinMode: "wireframe" }).success).toBe(false);
+    // Unknown or retired viewer modes (e.g. "surface" from an older version) fall back to the cartoon view.
+    expect(visualSchema.parse({ ...base, proteinMode: "surface" }).proteinMode).toBe("cartoon");
   });
 
   it("every editor form field exists in its schema's defaults", () => {

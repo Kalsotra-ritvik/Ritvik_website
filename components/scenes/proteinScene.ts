@@ -5,9 +5,8 @@ import { PALETTE, ParticleBuffer, chainColor, color, createLineMaterial, createP
 import { sseg } from "@/lib/story/chapters";
 import type { MolecularState } from "@/lib/story/molecularTimeline";
 import type { ViewerMode } from "@/lib/story/store";
-import { PROTEIN_MODES, type VisualSettings } from "@/lib/content/schema";
+import type { VisualSettings } from "@/lib/content/schema";
 import { buildResidues, type StructureData } from "@/lib/science/structure";
-import { createProteinStructure, type MeshWeights } from "./proteinStructure";
 import type { World } from "./world";
 
 /**
@@ -17,11 +16,6 @@ import type { World } from "./world";
  * The path from the extended chain to that fold is an ILLUSTRATIVE interpolation
  * (helices form locally, then pack N→C). It is not a folding simulation, and in
  * cells SGLT2 is inserted into the ER membrane co-translationally.
- *
- * During folding the chain is drawn as particles. Once folded, the scene
- * crossfades to mesh representations of the deposited model (cartoon,
- * backbone, surface, binding site; see proteinStructure.ts). "Beads" keeps the
- * particle model.
  */
 const SCALE = 0.1; // Å → world units (≈ nm)
 const SPC = 0.33; // spacing along the extended chain
@@ -32,7 +26,7 @@ export function createProteinScene(
   ptcWorld: THREE.Vector3,
   tunnelExitWorld: THREE.Vector3,
   quality: "high" | "low",
-  colors: VisualSettings["colors"],
+  colors?: VisualSettings["colors"],
 ) {
   const high = quality === "high";
   const residues = buildResidues(data, "A");
@@ -117,7 +111,7 @@ export function createProteinScene(
   // ---- MAP17 (chain B) and empagliflozin ----------------------------------------------
   const extras = new ParticleBuffer();
   const map17 = data.chains.find((c) => c.id === "B");
-  const mapCol = color(PALETTE.map17);
+  const mapCol = color(colors ? new THREE.Color().setStyle(colors.map17).getHex() : PALETTE.map17);
   const map17Centroid = new THREE.Vector3();
   let mapCount = 0;
   for (const segment of map17?.segments ?? []) {
@@ -140,7 +134,8 @@ export function createProteinScene(
 
   const ligBuf = new ParticleBuffer();
   const ligandCentroid = new THREE.Vector3();
-  const elColor: Record<string, number> = { C: PALETTE.ligand, O: 0xff6b5a, CL: 0x8fe39a };
+  const ligandHex = colors ? new THREE.Color().setStyle(colors.ligand).getHex() : PALETTE.ligand;
+  const elColor: Record<string, number> = { C: ligandHex, O: 0xff6b5a, CL: 0x8fe39a };
   const ligPos = data.ligand.atoms.map((a) => new THREE.Vector3(...a.p).multiplyScalar(SCALE));
   ligPos.forEach((p, i) => {
     ligandCentroid.add(p);
@@ -153,8 +148,8 @@ export function createProteinScene(
   ligPoints.renderOrder = 3;
   const bondBuf = new ParticleBuffer();
   for (const [i, j] of data.ligand.bonds) {
-    bondBuf.push(ligPos[i], color(PALETTE.ligand), 1, [0, 1, 0], 0.9);
-    bondBuf.push(ligPos[j], color(PALETTE.ligand), 1, [0, 1, 0], 0.9);
+    bondBuf.push(ligPos[i], color(ligandHex), 1, [0, 1, 0], 0.9);
+    bondBuf.push(ligPos[j], color(ligandHex), 1, [0, 1, 0], 0.9);
   }
   const bondMat = createLineMaterial({ fogNear: 12, fogFar: 46 });
   const bonds = new THREE.LineSegments(bondBuf.toGeometry(), bondMat);
@@ -165,11 +160,6 @@ export function createProteinScene(
   const halo = new THREE.Points(haloBuf.toGeometry(), haloMat);
   halo.frustumCulled = false;
   group.add(ligPoints, bonds, halo);
-
-  // ---- Mesh representations of the deposited model -------------------------------------
-  const structure = createProteinStructure(data, quality, colors);
-  group.add(structure.group);
-  const weights: MeshWeights = { cartoon: 1, trace: 0, surface: 0, beads: 0, site: 0 };
 
   // ---- Per-frame state ---------------------------------------------------------------
   const P = residues.map(() => new THREE.Vector3());
@@ -322,12 +312,8 @@ export function createProteinScene(
 
   function update(t: number, ms: MolecularState, target: { mode: ViewerMode; yaw: number; pitch: number }, dt: number, instant: boolean) {
     const k = instant ? 1 : Math.min(1, dt * 4);
-    for (const m of PROTEIN_MODES) weights[m] += ((target.mode === m ? 1 : 0) - weights[m]) * k;
-    if (Math.abs(weights[target.mode] - 1) < 0.002) for (const m of PROTEIN_MODES) weights[m] = target.mode === m ? 1 : 0;
-    // The particle model keeps its cartoon-like shape; it is the "beads" representation once folded.
-    mode.cartoon = 1;
-    mode.trace = 0;
-    mode.site = 0;
+    for (const m of ["cartoon", "trace", "site"] as const) mode[m] += ((target.mode === m ? 1 : 0) - mode[m]) * k;
+    if (Math.abs(mode[target.mode] - 1) < 0.002) for (const m of ["cartoon", "trace", "site"] as const) mode[m] = target.mode === m ? 1 : 0;
 
     const key = `${ms.residues}|${ms.fold.toFixed(4)}|${mode.cartoon.toFixed(3)}|${mode.trace.toFixed(3)}|${mode.site.toFixed(3)}`;
     if (key !== lastKey) {
@@ -336,25 +322,18 @@ export function createProteinScene(
     }
     const visible = ms.residues > 0;
     group.visible = visible;
+    material.uniforms.uOpacity.value = 1;
 
-    // Folded: crossfade from the particle chain to the mesh representations.
-    const settled = sseg(ms.fold, 0.86, 1);
-    const particles = 1 - settled + settled * weights.beads;
-    material.uniforms.uOpacity.value = particles;
-    tube.visible = particles > 0.01;
-    structure.update(weights, settled);
-
-    // Particle extras (MAP17, ligand) accompany the beads representation.
-    const extrasOn = sseg(t, 4.96, 5.12) * weights.beads;
-    mapMat.uniforms.uOpacity.value = extrasOn;
+    // Structure extras appear once the chain has reached its folded state.
+    const extrasOn = sseg(t, 4.96, 5.12);
+    mapMat.uniforms.uOpacity.value = extrasOn * (1 - 0.65 * mode.site);
     mapPoints.visible = extrasOn > 0.01;
-    ligMat.uniforms.uOpacity.value = extrasOn;
-    bondMat.uniforms.uOpacity.value = extrasOn;
-    ligPoints.visible = bonds.visible = extrasOn > 0.01;
-    // A soft glow marks the ligand in every representation, strongest in the binding-site view.
-    const haloOn = sseg(t, 4.96, 5.12) * (0.25 + 0.75 * weights.site);
-    haloMat.uniforms.uOpacity.value = haloOn;
-    halo.visible = haloOn > 0.01;
+    const lig = extrasOn * THREE.MathUtils.lerp(0.75, 1, mode.site);
+    ligMat.uniforms.uOpacity.value = lig;
+    ligMat.uniforms.uSizeScale.value = THREE.MathUtils.lerp(1, 1.7, mode.site);
+    bondMat.uniforms.uOpacity.value = lig;
+    haloMat.uniforms.uOpacity.value = extrasOn * (0.35 + 0.65 * mode.site);
+    ligPoints.visible = bonds.visible = halo.visible = extrasOn > 0.01;
 
     group.rotation.set(target.pitch, target.yaw, 0);
     group.updateMatrixWorld(true);
@@ -376,12 +355,7 @@ export function createProteinScene(
     source: data.source,
     contacts: data.contacts,
     update,
-    /** Precompute the molecular surface while the browser is idle. */
-    prepare(ready?: () => void) {
-      structure.prepareSurface(ready);
-    },
     dispose() {
-      structure.dispose();
       disposeObject(group);
     },
   };

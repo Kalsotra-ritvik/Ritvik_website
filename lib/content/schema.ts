@@ -129,7 +129,7 @@ export const scienceSchema = z.object({
   structure: z.object({
     ...chapterCore,
     viewerTitle: plain(80),
-    modes: z.object({ cartoon: plain(300), trace: plain(300), surface: plain(300), beads: plain(300), site: plain(300) }),
+    modes: z.object({ cartoon: plain(300), trace: plain(300), site: plain(300) }),
     methodsEyebrow: plain(80),
     methodsTitle: inline(160),
     methodsNote: inline(500),
@@ -218,22 +218,17 @@ export const siteSchema = z.object({
   ogImage: assetSchema,
   favicon: assetSchema,
   contact: z.object({ eyebrow: plain(60), title: inline(160), body: rich(1200) }),
-  footer: z.object({ attribution: rich(1500), builtWith: plain(200), copyright: plain(120) }),
+  footer: z.object({ attribution: rich(1500), builtWith: plain(200), copyright: plain(120), adminLink: plain(40) }),
 });
 export type Site = z.infer<typeof siteSchema>;
 
-export const DNA_STYLES = ["smooth", "hybrid", "beads"] as const;
-export const PROTEIN_MODES = ["cartoon", "trace", "surface", "beads", "site"] as const;
-export const LIGHTING_PRESETS = ["studio", "deep", "warm"] as const;
+export const PROTEIN_MODES = ["cartoon", "trace", "site"] as const;
 export const CAMERA_PRESETS = ["cinematic", "close", "wide"] as const;
 export type ProteinMode = (typeof PROTEIN_MODES)[number];
 
 export const visualSchema = z.object({
-  dnaStyle: z.enum(DNA_STYLES),
-  rnaStyle: z.enum(["smooth", "beads"]),
-  ribosomeStyle: z.enum(["surface", "beads"]),
-  proteinMode: z.enum(PROTEIN_MODES),
-  lighting: z.enum(LIGHTING_PRESETS),
+  // Older stored values (e.g. "surface") fall back to the cartoon view.
+  proteinMode: z.enum(PROTEIN_MODES).catch("cartoon"),
   cameraPreset: z.enum(CAMERA_PRESETS),
   bloom: z.number().min(0).max(1),
   particleDensity: z.number().min(0.4).max(1.5),
@@ -250,7 +245,6 @@ export const visualSchema = z.object({
     dnaCoding: hexColor,
     dnaTemplate: hexColor,
     rna: hexColor,
-    sglt2: hexColor,
     map17: hexColor,
     ligand: hexColor,
   }),

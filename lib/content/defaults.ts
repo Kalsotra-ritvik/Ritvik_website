@@ -126,7 +126,7 @@ export const defaultScience: Science = {
     body: "In the cytoplasm the small ribosomal subunit, carrying the initiator Met-tRNA, binds near the 5′ cap and scans to the AUG start codon; the large subunit then joins.\n\nEach cycle, a tRNA whose anticodon pairs with the codon in the A site delivers one amino acid, a peptide bond forms, and the ribosome shifts one codon along: tRNAs move from A to P to E. The growing chain leaves through a tunnel in the large subunit.",
     sceneNoteTitle: "In the scene",
     sceneNote:
-      "The ribosome surface is computed from a deposited cryo-EM model of the human 80S ribosome (see the structure notes), scaled down and cut away so the tRNA sites are visible. tRNAs and mRNA are schematic. Anticodon bases are coloured as the complements of the codon they read (A·U, G·C); amino-acid colours follow the chain from N-terminus (teal) to C-terminus (amber).",
+      "The ribosome is cut away to show the A, P and E sites. Anticodon bases are coloured as the complements of the codon they read (A·U, G·C). The amino-acid colours follow the chain from N-terminus (teal) to C-terminus (amber), the same scheme used for the folded protein.",
     codonNote:
       "Residues: the first 14 amino acids of human SGLT2 (UniProt P31639). Codons: one valid codon per residue, chosen for display — not the native mRNA sequence.",
     codonNoteShort: "First residues of human SGLT2; codons chosen for display.",
@@ -158,11 +158,9 @@ export const defaultScience: Science = {
     sceneNote: "",
     viewerTitle: "Explore the structure",
     modes: {
-      cartoon: "Ribbon cartoon built from the backbone: α-helices as flat ribbons, loops as tubes. SGLT2 is coloured from N-terminus (teal) to C-terminus (amber); MAP17 is shown in sand.",
-      trace: "Backbone trace: a smooth tube through the Cα atoms, with one sphere per resolved residue.",
-      surface: "Gaussian molecular surface computed from every protein heavy atom in the deposited model, coloured by chain (SGLT2 teal, MAP17 sand); residues lining the empagliflozin site are tinted gold.",
-      beads: "The particle style used during the scroll story: beads along a smoothed backbone.",
-      site: "Empagliflozin as bound in the structure, with SGLT2 residues that have any heavy atom within 4.5 Å of it drawn as sticks.",
+      cartoon: "α-helices smoothed into cylinders and coloured from N-terminus (teal) to C-terminus (amber).",
+      trace: "One bead per resolved Cα atom, joined in sequence order.",
+      site: "Empagliflozin as bound in the structure; residues with any heavy atom within 4.5 Å of it are highlighted in coral.",
     },
     methodsEyebrow: "Dissertation methods",
     methodsTitle: "Screening, simulation, prediction",
@@ -284,18 +282,15 @@ export const defaultSite: Site = {
   },
   footer: {
     attribution:
-      "Structure data: PDB [7VSI](https://www.rcsb.org/structure/7VSI) (Niu et al., *Nature* 2022) and the human 80S ribosome model credited in the README, distributed by the wwPDB under CC0. Molecular scenes are schematic and not to scale; the DNA sequence and transcript are illustrative; figures marked “simulated” do not show real data.",
+      "Structure data: PDB [7VSI](https://www.rcsb.org/structure/7VSI) (Niu et al., *Nature* 2022), distributed by the wwPDB under CC0. Molecular scenes are schematic and not to scale; the DNA sequence and transcript are illustrative; figures marked “simulated” do not show real data.",
     builtWith: "Built with Next.js, three.js and GSAP.",
     copyright: "© Ritvik Kalsotra",
+    adminLink: "Admin login",
   },
 };
 
 export const defaultVisual: VisualSettings = {
-  dnaStyle: "hybrid",
-  rnaStyle: "smooth",
-  ribosomeStyle: "surface",
   proteinMode: "cartoon",
-  lighting: "studio",
   cameraPreset: "cinematic",
   bloom: 0.35,
   particleDensity: 1,
@@ -312,7 +307,6 @@ export const defaultVisual: VisualSettings = {
     dnaCoding: "#5fb5a9",
     dnaTemplate: "#6f8fe0",
     rna: "#e0894f",
-    sglt2: "#5fb5a9",
     map17: "#c9b48f",
     ligand: "#f2c46b",
   },

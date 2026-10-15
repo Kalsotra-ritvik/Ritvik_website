@@ -47,5 +47,3 @@ next-env.d.ts
 # playwright
 /test-results/
 /playwright-report/
-/data/raw/4ug0.cif.gz
-/public/workers/

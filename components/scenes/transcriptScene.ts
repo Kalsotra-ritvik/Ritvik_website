@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { createSurface } from "@/components/molecular/surface";
-import { SmoothStrandRenderer, StrandRenderer } from "@/components/molecular/strand";
+import { StrandRenderer } from "@/components/molecular/strand";
 import { dnaAxisY } from "@/components/molecular/dna";
 import { PathSampler } from "@/lib/engine/path";
 import { PALETTE, ParticleBuffer, color, createParticleMaterial, disposeObject } from "@/lib/engine/materials";
@@ -16,13 +16,7 @@ const SP_TRANSCRIBE = 0.3;
 const SP_DISPLAY = 0.15;
 export const SP_MRNA = 0.3;
 
-export function createTranscriptScene(
-  world: World,
-  gene: Gene,
-  quality: "high" | "low",
-  rnaStyle: "smooth" | "beads" = "beads",
-  rnaColor?: string,
-) {
+export function createTranscriptScene(world: World, gene: Gene, quality: "high" | "low", rnaColor?: string) {
   const high = quality === "high";
   const preLen = gene.preMrna.length;
   const polyALen = gene.polyA;
@@ -105,7 +99,7 @@ export function createTranscriptScene(
   const sRib = sAt(RIB.clone().add(new THREE.Vector3(0, mrnaY, 0)));
 
   // --- RNA strand ------------------------------------------------------------------
-  const strand = rnaStyle === "smooth" ? new SmoothStrandRenderer(total, quality) : new StrandRenderer(total, quality, 5);
+  const strand = new StrandRenderer(total, quality, 5);
   const centers = new Float32Array(total * 3);
   const bbColor = new Float32Array(total * 3);
   const baseColor = new Float32Array(total * 3);

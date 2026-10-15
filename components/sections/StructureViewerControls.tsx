@@ -5,13 +5,11 @@ import { story } from "@/lib/story/store";
 import type { ProteinMode } from "@/lib/content/schema";
 
 const LABELS: Record<ProteinMode, string> = {
-  cartoon: "Cartoon",
-  trace: "Backbone",
-  surface: "Surface",
-  beads: "Beads",
+  cartoon: "Helices",
+  trace: "Backbone trace",
   site: "Binding site",
 };
-const ORDER: ProteinMode[] = ["cartoon", "trace", "surface", "beads", "site"];
+const ORDER: ProteinMode[] = ["cartoon", "trace", "site"];
 const STEP = Math.PI / 12;
 
 export default function StructureViewerControls({
@@ -57,7 +55,7 @@ export default function StructureViewerControls({
   return (
     <div className="panel p-5 sm:p-6">
       <p className="note uppercase tracking-[0.14em] text-teal-400">{title}</p>
-      <div role="radiogroup" aria-label="Representation" className="mt-3 grid grid-cols-3 gap-1 rounded-2xl border border-white/10 p-1 sm:grid-cols-5">
+      <div role="radiogroup" aria-label="Representation" className="mt-3 flex flex-wrap gap-1 rounded-full border border-white/10 p-1">
         {ORDER.map((m) => (
           <button
             key={m}
@@ -66,13 +64,13 @@ export default function StructureViewerControls({
             aria-checked={mode === m}
             disabled={disabled}
             onClick={() => story.set({ viewerMode: m })}
-            className={`min-h-[40px] rounded-xl px-2 text-sm whitespace-nowrap ${mode === m ? "bg-amber-300 text-ink-900" : "text-mist-300 hover:text-mist-100"} disabled:opacity-50`}
+            className={`min-h-[40px] flex-1 rounded-full px-3 text-sm whitespace-nowrap ${mode === m ? "bg-amber-300 text-ink-900" : "text-mist-300 hover:text-mist-100"} disabled:opacity-50`}
           >
             {LABELS[m]}
           </button>
         ))}
       </div>
-      <p className="mt-3 min-h-[4.5rem] text-sm leading-relaxed text-mist-200" aria-live="polite">
+      <p className="mt-3 min-h-[3rem] text-sm leading-relaxed text-mist-200" aria-live="polite">
         {modes[mode]}
         {mode === "site" && ` (${contactCount} residues, computed from the deposited coordinates.)`}
       </p>

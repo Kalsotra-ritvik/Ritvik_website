@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { SiteContent } from "@/lib/content/schema";
 import { resolveAsset } from "@/lib/content/public";
 import { Inline, Rich } from "@/components/Markup";
@@ -51,7 +52,14 @@ export default function Contact({ content, index }: { content: SiteContent; inde
             <Rich text={site.footer.attribution} />
             {site.footer.builtWith && <p>{site.footer.builtWith}</p>}
           </div>
-          {site.footer.copyright && <p className="self-end">{site.footer.copyright}</p>}
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-1 sm:justify-end">
+            {site.footer.copyright && <p>{site.footer.copyright}</p>}
+            {site.footer.adminLink && (
+              <Link href="/admin/login" prefetch={false} rel="nofollow" className="text-mist-300 underline-offset-4 hover:text-mist-100 hover:underline">
+                {site.footer.adminLink}
+              </Link>
+            )}
+          </div>
         </div>
       </footer>
     </section>
