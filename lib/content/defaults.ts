@@ -160,7 +160,7 @@ export const defaultScience: Science = {
     modes: {
       cartoon: "Ribbon cartoon built from the backbone: α-helices as flat ribbons, loops as tubes. SGLT2 is coloured from N-terminus (teal) to C-terminus (amber); MAP17 is shown in sand.",
       trace: "Backbone trace: a smooth tube through the Cα atoms, with one sphere per resolved residue.",
-      surface: "Molecular surface computed from every heavy atom in the deposited model (Gaussian surface), coloured by chain.",
+      surface: "Gaussian molecular surface computed from every protein heavy atom in the deposited model, coloured by chain (SGLT2 teal, MAP17 sand); residues lining the empagliflozin site are tinted gold.",
       beads: "The particle style used during the scroll story: beads along a smoothed backbone.",
       site: "Empagliflozin as bound in the structure, with SGLT2 residues that have any heavy atom within 4.5 Å of it drawn as sticks.",
     },

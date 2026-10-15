@@ -67,6 +67,8 @@ const header = (prefix) =>
   lines.filter((l) => l.startsWith(prefix)).map((l) => l.slice(10).trim()).join(" ").replace(/\s+/g, " ");
 
 const caAtoms = atoms.filter((a) => !a.het && a.name === "CA");
+// Backbone carbonyl O per residue: orients the cartoon ribbon (peptide-plane direction).
+const oByKey = new Map(atoms.filter((a) => !a.het && a.name === "O").map((a) => [`${a.chain}${a.resSeq}`, a]));
 const ligand = atoms.filter((a) => a.het && a.resName === LIGAND_CODE);
 if (ligand.length === 0) throw new Error(`Ligand ${LIGAND_CODE} not found`);
 
@@ -140,6 +142,19 @@ for (let i = 0; i < ligand.length; i++) {
   }
 }
 
+// ---- Heavy atoms of the contact residues (for the binding-site view) ---------
+const contactResidues = contacts.map((c) => {
+  const resAtoms = atoms.filter((a) => !a.het && a.chain === c.chain && a.resSeq === c.resSeq);
+  const resBonds = [];
+  for (let i = 0; i < resAtoms.length; i++) {
+    for (let j = i + 1; j < resAtoms.length; j++) {
+      const a = resAtoms[i], b = resAtoms[j];
+      if (Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 1.9) resBonds.push([i, j]);
+    }
+  }
+  return { chain: c.chain, resSeq: c.resSeq, resName: c.resName, atoms: resAtoms.map((a) => ({ name: a.name, el: a.element, p: place(a) })), bonds: resBonds };
+});
+
 // ---- Chains as contiguous segments ---------------------------------------
 const inHelix = (chain, resSeq) => helices.some((h) => h.chain === chain && resSeq >= h.start && resSeq <= h.end);
 function chainSegments(chain) {
@@ -152,7 +167,8 @@ function chainSegments(chain) {
       current = [];
     }
     const a = cas[i];
-    current.push({ n: a.resSeq, aa: THREE_TO_ONE[a.resName] ?? "X", ss: inHelix(chain, a.resSeq) ? "H" : "C", p: place(a) });
+    const o = oByKey.get(`${chain}${a.resSeq}`);
+    current.push({ n: a.resSeq, aa: THREE_TO_ONE[a.resName] ?? "X", ss: inHelix(chain, a.resSeq) ? "H" : "C", p: place(a), ...(o ? { o: place(o) } : {}) });
   }
   if (current.length) segments.push(current);
   return segments;
@@ -176,7 +192,7 @@ const out = {
     },
     license: "wwPDB data are available under CC0 1.0",
     processing:
-      "Cα trace from scripts/build-structure.mjs. Centred on the chain A Cα centroid and rotated so the mean long-helix axis is +Y. Units: Å.",
+      "Cα trace with backbone carbonyl O, all protein heavy atoms (for the surface) and the atoms of ligand-contact residues, from scripts/build-structure.mjs. Centred on the chain A Cα centroid and rotated so the mean long-helix axis is +Y. Units: Å.",
   },
   chains: [
     { id: "A", name: "SGLT2 (SLC5A2)", uniprot: "P31639", segments: chainSegments("A") },
@@ -190,7 +206,16 @@ const out = {
     atoms: ligand.map((a) => ({ el: a.element, p: place(a) })),
     bonds,
   },
-  contacts: { cutoffAngstrom: CONTACT_CUTOFF, residues: contacts },
+  contacts: { cutoffAngstrom: CONTACT_CUTOFF, residues: contacts, atoms: contactResidues },
+  // Every protein heavy atom as [x, y, z, resSeq] with coordinates in 0.1 Å (for the molecular surface).
+  heavy: Object.fromEntries(
+    ["A", "B"].map((chain) => [
+      chain,
+      atoms
+        .filter((a) => !a.het && a.chain === chain)
+        .flatMap((a) => [...place(a).map((v) => Math.round(v * 10)), a.resSeq]),
+    ]),
+  ),
 };
 
 mkdirSync(dirname(OUTPUT), { recursive: true });

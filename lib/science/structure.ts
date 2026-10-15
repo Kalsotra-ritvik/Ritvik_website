@@ -11,6 +11,16 @@ export interface ResidueCA {
   aa: string;
   ss: "H" | "C";
   p: Vec3;
+  /** Backbone carbonyl O, when resolved. */
+  o?: Vec3;
+}
+
+export interface ContactResidueAtoms {
+  chain: string;
+  resSeq: number;
+  resName: string;
+  atoms: { name: string; el: string; p: Vec3 }[];
+  bonds: [number, number][];
 }
 
 export interface StructureData {
@@ -27,7 +37,13 @@ export interface StructureData {
   helices: { chain: string; start: number; end: number }[];
   sequence: Record<string, string>;
   ligand: { code: string; name: string; atoms: { el: string; p: Vec3 }[]; bonds: [number, number][] };
-  contacts: { cutoffAngstrom: number; residues: { chain: string; resSeq: number; resName: string; minDistance: number }[] };
+  contacts: {
+    cutoffAngstrom: number;
+    residues: { chain: string; resSeq: number; resName: string; minDistance: number }[];
+    atoms?: ContactResidueAtoms[];
+  };
+  /** Protein heavy atoms per chain, flat [x, y, z, resSeq] with coordinates in 0.1 Å. */
+  heavy?: Record<string, number[]>;
 }
 
 export interface ResidueModel {

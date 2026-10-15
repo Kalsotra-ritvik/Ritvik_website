@@ -36,6 +36,8 @@ export const FOG_COLOR = new THREE.Color(0x070b12);
 export const sharedUniforms = {
   uViewportH: { value: 800 },
   uTime: { value: 0 },
+  /** Strength of additive glow highlights (Visual settings → Glow). */
+  uGlow: { value: 1 },
 };
 
 const VERTEX = /* glsl */ `
@@ -88,6 +90,7 @@ void main() {
 
 const FRAGMENT_GLOW = /* glsl */ `
 uniform float uIntensity;
+uniform float uGlow;
 varying vec3 vColor;
 varying float vAlpha;
 varying float vLight;
@@ -99,7 +102,7 @@ void main() {
   float core = exp(-r2 * 3.2);
   float alpha = core * vAlpha * (1.0 - 0.85 * vFog);
   if (alpha < 0.003) discard;
-  gl_FragColor = vec4(vColor * vLight * uIntensity, alpha);
+  gl_FragColor = vec4(vColor * vLight * uIntensity * uGlow, alpha);
 }
 `;
 

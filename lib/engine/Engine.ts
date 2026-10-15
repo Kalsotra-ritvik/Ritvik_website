@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { createDNA, type DNAModel } from "@/components/molecular/dna";
 import { createWorld, type World } from "@/components/scenes/world";
 import { createTranscriptScene, type TranscriptScene } from "@/components/scenes/transcriptScene";
@@ -7,6 +8,7 @@ import { createPoreScene } from "@/components/scenes/poreScene";
 import { createTranslationScene, type TranslationScene } from "@/components/scenes/translationScene";
 import { createProteinScene, type ProteinScene } from "@/components/scenes/proteinScene";
 import { createDust } from "@/components/scenes/dustScene";
+import { createRibosomeModel, loadRibosome } from "@/components/scenes/ribosomeModel";
 import { buildGene, type Gene } from "@/lib/science/gene";
 import { loadStructure } from "@/lib/science/structure";
 import { molecularState, GENE_LAYOUT, PHASES, type MolecularState } from "@/lib/story/molecularTimeline";
@@ -27,7 +29,15 @@ export interface EngineOptions {
   onFirstFrame: () => void;
 }
 
-const PROTEIN_RESIDUES = 672; // SGLT2 SEQRES length; used until the structure file has loaded
+const PROTEIN_RESIDUES = 672;
+
+/** Lighting presets for the physically based meshes (particles have their own baked lighting). */
+const LIGHTING = {
+  studio: { env: 0.9, key: 0xffffff, keyIntensity: 1.5, exposure: 1.0 },
+  deep: { env: 0.5, key: 0xdfe8ff, keyIntensity: 2.1, exposure: 0.92 },
+  warm: { env: 0.8, key: 0xffdcb0, keyIntensity: 1.6, exposure: 1.04 },
+} as const;
+const CAMERA_DISTANCE = { cinematic: 1, close: 0.88, wide: 1.15 } as const; // SGLT2 SEQRES length; used until the structure file has loaded
 
 type IdleWindow = Window & {
   requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
@@ -84,6 +94,8 @@ export class MolecularEngine {
   private unsubscribe: () => void;
   private resizeObserver: ResizeObserver;
   private labelEls = new Map<string, HTMLElement>();
+  private envTexture: THREE.Texture;
+  private keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
   private tabHidden = false;
   private onScreen = true;
   private intersection: IntersectionObserver;
@@ -96,8 +108,21 @@ export class MolecularEngine {
       alpha: true,
       powerPreference: "high-performance",
     });
-    this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+    // Particle shaders write display colours directly; the physically based
+    // meshes are lit in linear space, tone mapped and converted to sRGB.
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.localClippingEnabled = true;
     this.renderer.setClearColor(0x000000, 0);
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    const room = new RoomEnvironment();
+    this.envTexture = pmrem.fromScene(room, 0.04).texture;
+    room.dispose();
+    pmrem.dispose();
+    this.scene.environment = this.envTexture;
+    this.keyLight.position.set(6, 9, 7);
+    this.scene.add(this.keyLight);
+    this.applyVisual();
     this.pixelRatio = Math.min(window.devicePixelRatio || 1, profile.maxPixelRatio);
     this.renderer.setPixelRatio(this.pixelRatio);
 
@@ -107,7 +132,13 @@ export class MolecularEngine {
     this.world = createWorld(this.gene.preMrna.length);
     this.scene.add(this.world.dnaGroup);
 
-    this.dna = createDNA({ basePairs: GENE_LAYOUT.basePairs, quality: profile.quality, sequence: this.gene.dnaCoding });
+    this.dna = createDNA({
+      basePairs: GENE_LAYOUT.basePairs,
+      quality: profile.quality,
+      sequence: this.gene.dnaCoding,
+      style: opts.visual.dnaStyle,
+      colors: { coding: opts.visual.colors.dnaCoding, template: opts.visual.colors.dnaTemplate },
+    });
     this.dnaSpin.add(this.dna.group);
     this.world.dnaGroup.add(this.dnaSpin);
 
@@ -117,7 +148,8 @@ export class MolecularEngine {
       this.world.PROT.clone().add(vec3(14, 12, 10)),
     ]);
     bounds.expandByPoint(this.world.txEndW.clone().add(vec3(12, 0, 0)));
-    this.dust = createDust(bounds, profile.dust);
+    this.dust = createDust(bounds, Math.round(profile.dust * opts.visual.particleDensity));
+    this.dust.object.visible = opts.visual.showDust;
     this.scene.add(this.dust.object);
 
     this.ms = molecularState(0, this.gene.preMrna.length, this.gene.codons.length, PROTEIN_RESIDUES);
@@ -160,7 +192,7 @@ export class MolecularEngine {
     const q = this.opts.profile.quality;
     this.buildSteps = [
       () => {
-        this.transcript = createTranscriptScene(this.world, this.gene, q);
+        this.transcript = createTranscriptScene(this.world, this.gene, q, this.opts.visual.rnaStyle);
         this.scene.add(this.transcript.group);
       },
       () => {
@@ -176,12 +208,30 @@ export class MolecularEngine {
         this.scene.add(this.translation.group);
       },
       () => {
+        if (this.opts.visual.ribosomeStyle !== "surface") return;
+        loadRibosome(this.abort.signal)
+          .then((data) => {
+            if (this.disposed || !this.translation) return;
+            // Building the surfaces takes a few tens of milliseconds; do it in an idle slice.
+            idle(() => {
+              if (this.disposed || !this.translation) return;
+              this.translation.useModel(createRibosomeModel(data, q));
+              this.needsRender = true;
+            });
+          })
+          .catch((err) => {
+            if ((err as Error).name !== "AbortError") console.warn("Ribosome model unavailable; using the schematic:", err);
+          });
+      },
+      () => {
         const translation = this.translation!;
         loadStructure(undefined, this.abort.signal)
           .then((data) => {
             if (this.disposed) return;
-            this.protein = createProteinScene(this.world, data, translation.ptcWorld(), translation.tunnelExitWorld(), q);
+            this.protein = createProteinScene(this.world, data, translation.ptcWorld(), translation.tunnelExitWorld(), q, this.opts.visual.colors);
             this.scene.add(this.protein.group);
+            // The surface takes a moment to compute; do it before the visitor reaches the viewer.
+            idle(() => !this.disposed && this.protein?.prepare());
             this.needsRender = true;
             this.updateRunning();
           })
@@ -320,7 +370,7 @@ export class MolecularEngine {
     if (reduced) this.t = target;
     else {
       const gap = target - this.t;
-      const rate = 3.2 + Math.min(6, Math.abs(gap) * 2.5);
+      const rate = (3.2 + Math.min(6, Math.abs(gap) * 2.5)) * this.opts.visual.transitionSpeed;
       this.t += gap * (1 - Math.exp(-dt * rate));
       if (Math.abs(target - this.t) < 1e-4) this.t = target;
     }
@@ -377,7 +427,8 @@ export class MolecularEngine {
     this.ms = ms;
 
     // DNA: gentle spin about its own axis in the hero, frozen once transcription starts.
-    const spinSpeed = 0.32 * (1 - sseg(t, 0.15, 0.6));
+    const motion = this.opts.visual.motionIntensity;
+    const spinSpeed = 0.32 * motion * (1 - sseg(t, 0.15, 0.6));
     if (!reduced) this.spin += dt * spinSpeed;
     this.dnaSpin.rotation.y = this.spin;
     const dnaFade = 1 - sseg(t, 2.6, 3.0) * 0.85 - sseg(t, 3.0, 3.2) * 0.15;
@@ -392,6 +443,7 @@ export class MolecularEngine {
     if (this.buildSteps.length && t > 0.45) this.flushBuild();
     this.transcript?.update(t, ms);
     this.transcriptome?.update(ms.population, sseg(t, 2.85, 3.05));
+    if (this.transcriptome && !this.opts.visual.showTranscriptPopulation) this.transcriptome.group.visible = false;
     this.pore?.update(sseg(t, 2.72, 2.95) * (1 - sseg(t, 3.16, 3.3)));
     this.translation?.update(t, ms);
 
@@ -400,7 +452,7 @@ export class MolecularEngine {
     this.siteWeight += (site - this.siteWeight) * (reduced ? 1 : Math.min(1, dt * 3));
 
     if (this.protein) {
-      const autoYawSpeed = 0.14 * sseg(t, 4.36, 4.7) * (s.viewerMode === "site" ? 0.25 : 1);
+      const autoYawSpeed = 0.14 * motion * sseg(t, 4.36, 4.7) * (s.viewerMode === "site" ? 0.25 : 1);
       if (t < 4.34) this.yaw *= reduced ? 0 : 1 - Math.min(1, dt * 3);
       else if (!reduced) this.yaw += dt * autoYawSpeed;
       const inViewer = t > 4.9 && t < 6.3;
@@ -412,7 +464,7 @@ export class MolecularEngine {
         reduced,
       );
     }
-    this.dust.setDrift(reduced ? 0 : 1);
+    this.dust.setDrift(reduced ? 0 : motion);
 
     // Translation read-out for the DOM HUD.
     const codonIndex = t >= PHASES.largeSubunit[0] && t < 4.02 ? Math.min(this.gene.codons.length - 1, ms.residues) : -1;
@@ -422,15 +474,19 @@ export class MolecularEngine {
     this.director.evaluate(t);
     const aspect = this.width / this.height;
     // The long hero helix may crop on portrait screens; later subjects are pulled back to fit.
-    const k = THREE.MathUtils.lerp(Math.min(1.15, portraitDistanceScale(aspect)), portraitDistanceScale(aspect), sseg(t, 0.3, 0.9));
+    const k =
+      THREE.MathUtils.lerp(Math.min(1.15, portraitDistanceScale(aspect)), portraitDistanceScale(aspect), sseg(t, 0.3, 0.9)) *
+      CAMERA_DISTANCE[this.opts.visual.cameraPreset];
     const pos = this.director.position.clone().sub(this.director.target).multiplyScalar(k).add(this.director.target);
     if (!reduced) {
       const heroWeight = 1 - seg(t, 0, 0.6);
-      pos.x += Math.sin(this.time * 0.19) * 0.35 * heroWeight;
-      pos.y += Math.sin(this.time * 0.27) * 0.22 * heroWeight;
-      this.pointerSmoothed.lerp(this.pointer, Math.min(1, dt * 2.5));
-      pos.x += this.pointerSmoothed.x * 0.45;
-      pos.y -= this.pointerSmoothed.y * 0.3;
+      pos.x += Math.sin(this.time * 0.19) * 0.35 * heroWeight * motion;
+      pos.y += Math.sin(this.time * 0.27) * 0.22 * heroWeight * motion;
+      if (this.opts.visual.enablePointerParallax) {
+        this.pointerSmoothed.lerp(this.pointer, Math.min(1, dt * 2.5));
+        pos.x += this.pointerSmoothed.x * 0.45 * motion;
+        pos.y -= this.pointerSmoothed.y * 0.3 * motion;
+      }
     }
     this.camera.position.copy(pos);
     // Portrait hero: roll the camera so the diagonal helix runs closer to vertical.
@@ -450,7 +506,9 @@ export class MolecularEngine {
     const a = this.transcript.anchors;
     const tl = this.translation.anchors;
     const tm = this.transcriptome.anchors;
-    const p = this.protein?.anchors;
+    const p = this.protein?.group.visible ? this.protein.anchors : undefined;
+    // A label is only shown while the object it points at is visible.
+    const tmOn = this.transcriptome.group.visible;
     switch (id) {
       case "template": return a.template;
       case "polymerase": return a.polymerase.clone().add(vec3(0.8, 1.9, 0.4));
@@ -458,9 +516,9 @@ export class MolecularEngine {
       case "cap": return a.rna5;
       case "intron": return a.intron;
       case "polyA": return a.polyA;
-      case "mrna": return tm.mrna;
-      case "isoform": return tm.isoform;
-      case "ncrna": return tm.ncrna;
+      case "mrna": return tmOn ? tm.mrna : null;
+      case "isoform": return tmOn ? tm.isoform : null;
+      case "ncrna": return tmOn ? tm.ncrna : null;
       case "pore": return a.pore;
       case "small": return tl.small;
       case "large": return tl.large;
@@ -507,8 +565,22 @@ export class MolecularEngine {
   /** Apply new visual settings (admin preview or a live content update). */
   setVisual(visual: VisualSettings) {
     this.opts.visual = visual;
+    this.applyVisual();
     this.needsRender = true;
     this.updateRunning();
+  }
+
+  /** Settings that map directly onto renderer and material state. */
+  private applyVisual() {
+    const v = this.opts.visual;
+    const light = LIGHTING[v.lighting];
+    this.scene.environmentIntensity = light.env;
+    this.keyLight.color.setHex(light.key).convertSRGBToLinear();
+    this.keyLight.intensity = light.keyIntensity;
+    this.renderer.toneMappingExposure = light.exposure;
+    // 0.35 (default) keeps the original glow strength.
+    sharedUniforms.uGlow.value = 0.45 + v.bloom * 1.6;
+    if (this.dust) this.dust.object.visible = v.showDust;
   }
 
   // ---------------------------------------------------------------------------------
@@ -531,6 +603,7 @@ export class MolecularEngine {
     this.translation?.dispose();
     this.protein?.dispose();
     this.dust.dispose();
+    this.envTexture.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
   }
