@@ -34,8 +34,11 @@ export async function lockRemaining(ip: string | null, loginId: string): Promise
 
 async function bump(k: string, limit: number) {
   const now = new Date();
-  const windowStart = new Date(Date.now() - WINDOW_MS);
-  const lockUntil = new Date(Date.now() + LOCK_MS);
+  // Raw sql`` parameters are sent as text, so pass timestamps as ISO strings with an explicit cast.
+  const ts = (d: Date) => sql`${d.toISOString()}::timestamptz`;
+  const windowStart = ts(new Date(Date.now() - WINDOW_MS));
+  const lockUntil = ts(new Date(Date.now() + LOCK_MS));
+  const nowSql = ts(now);
   await getDb()
     .insert(loginAttempts)
     .values({ key: k, failures: 1, windowStart: now })
@@ -44,7 +47,7 @@ async function bump(k: string, limit: number) {
       set: {
         // Restart the window when the previous one has expired.
         failures: sql`case when ${loginAttempts.windowStart} < ${windowStart} then 1 else ${loginAttempts.failures} + 1 end`,
-        windowStart: sql`case when ${loginAttempts.windowStart} < ${windowStart} then ${now} else ${loginAttempts.windowStart} end`,
+        windowStart: sql`case when ${loginAttempts.windowStart} < ${windowStart} then ${nowSql} else ${loginAttempts.windowStart} end`,
         lockedUntil: sql`case when (case when ${loginAttempts.windowStart} < ${windowStart} then 1 else ${loginAttempts.failures} + 1 end) >= ${limit} then ${lockUntil} else ${loginAttempts.lockedUntil} end`,
       },
     });

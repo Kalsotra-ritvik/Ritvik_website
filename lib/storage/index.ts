@@ -25,6 +25,8 @@ export interface StorageAdapter {
   remove(key: string): Promise<void>;
   publicUrl(key: string): string;
   readStart(key: string, bytes: number): Promise<Uint8Array>;
+  /** Size in bytes of a stored object, or null when it does not exist. */
+  size(key: string): Promise<number | null>;
   presignPut?(key: string, contentType: string): Promise<{ url: string; headers: Record<string, string> }>;
 }
 
@@ -121,6 +123,13 @@ function localAdapter(): StorageAdapter {
         await handle.close();
       }
     },
+    async size(key) {
+      try {
+        return (await fs.stat(file(key))).size;
+      } catch {
+        return null;
+      }
+    },
   };
 }
 
@@ -180,6 +189,12 @@ function r2Adapter(): StorageAdapter {
       const res = await client.fetch(objectUrl(key), { headers: { range: `bytes=0-${bytes - 1}` } });
       await check(res, "read");
       return new Uint8Array(await res.arrayBuffer());
+    },
+    async size(key) {
+      const res = await client.fetch(objectUrl(key), { method: "HEAD" });
+      if (res.status === 404) return null;
+      await check(res, "check");
+      return Number(res.headers.get("content-length") ?? NaN);
     },
     async presignPut(key, contentType) {
       const url = new URL(objectUrl(key));

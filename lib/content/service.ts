@@ -62,6 +62,7 @@ export const STATUS_LABEL: Record<EntryStatus, string> = {
 
 /** A short human-readable title for any entry. */
 export function labelFor(collection: string, data: unknown): string {
+  if (isSingleton(collection)) return SINGLETON_TITLES[collection as SingletonName];
   const d = (data ?? {}) as Record<string, unknown>;
   const pick = ["title", "degree", "role", "label", "name"].map((k) => d[k]).find((v) => typeof v === "string" && v.trim());
   if (typeof pick === "string") {

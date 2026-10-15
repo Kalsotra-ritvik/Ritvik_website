@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 /** Shown on top of the portfolio while an administrator previews drafts. */
 export default function PreviewBanner() {
   return (
@@ -10,9 +12,9 @@ export default function PreviewBanner() {
             Exit preview
           </button>
         </form>
-        <a href="/admin" className="underline underline-offset-4">
+        <Link href="/admin" className="underline underline-offset-4">
           Back to admin
-        </a>
+        </Link>
       </div>
     </div>
   );

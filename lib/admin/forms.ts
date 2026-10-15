@@ -611,22 +611,28 @@ export const FORMS: Record<CollectionName, FormSection[]> = {
   ],
 };
 
-/** Admin route slug ↔ list collection. */
-export const LIST_ROUTES = {
-  projects: "project",
-  education: "education",
-  experience: "experience",
-  skills: "skillGroup",
-  credentials: "credential",
-} as const;
-export type ListRoute = keyof typeof LIST_ROUTES;
+export interface AdminRoute {
+  route: string;
+  collection: CollectionName;
+  title: string;
+  description: string;
+  list: boolean;
+  previewAnchor?: string;
+  /** Singular noun for list items. */
+  noun?: string;
+}
 
-export const SINGLETON_ROUTES = {
-  profile: "profile",
-  site: "site",
-  sections: "sections",
-  science: "science",
-  annotations: "labels",
-  figures: "figures",
-  visual: "visual",
-} as const;
+export const ADMIN_ROUTES: Record<string, AdminRoute> = {
+  profile: { route: "profile", collection: "profile", title: "Profile & hero", description: "Name, introduction, biography, dissertation, contact details, profile links and the CV.", list: false, previewAnchor: "hero" },
+  projects: { route: "projects", collection: "project", title: "Projects", description: "Research projects shown in the Projects section. The featured project also supplies the methods card in the structure chapter.", list: true, previewAnchor: "projects", noun: "project" },
+  experience: { route: "experience", collection: "experience", title: "Experience", description: "Research positions, internships and training.", list: true, previewAnchor: "experience", noun: "position" },
+  education: { route: "education", collection: "education", title: "Education", description: "Degrees and programmes, shown with Experience.", list: true, previewAnchor: "experience", noun: "degree" },
+  skills: { route: "skills", collection: "skillGroup", title: "Skills", description: "Skill groups and the skills inside them. Rename, reorder or hide groups and individual skills.", list: true, previewAnchor: "skills", noun: "skill group" },
+  credentials: { route: "credentials", collection: "credential", title: "Publications & credentials", description: "Publications, posters, presentations, certifications, workshops and awards.", list: true, previewAnchor: "credentials", noun: "record" },
+  science: { route: "science", collection: "science", title: "Scientific text", description: "Chapter titles, explanations and scene notes of the molecular story. Keep explanations accurate: they describe what each 3D scene shows.", list: false, previewAnchor: "foundations" },
+  annotations: { route: "annotations", collection: "labels", title: "Scene annotations", description: "Text of the labels attached to molecules in the 3D scenes.", list: false, previewAnchor: "foundations" },
+  figures: { route: "figures", collection: "figures", title: "Figures", description: "Captions, axis labels and the simulated-data notice of the transcriptomics figures.", list: false, previewAnchor: "transcriptome" },
+  sections: { route: "sections", collection: "sections", title: "Navigation & sections", description: "Top navigation, order and visibility of the portfolio sections, and section headings.", list: false },
+  site: { route: "site", collection: "site", title: "Contact, footer & SEO", description: "Website title and description, sharing image, favicon, the contact section and footer text.", list: false, previewAnchor: "contact" },
+  visual: { route: "visual", collection: "visual", title: "Visual settings", description: "Molecular representation styles, lighting, colours, motion and annotations. Every control is limited to safe ranges.", list: false, previewAnchor: "foundations" },
+};
