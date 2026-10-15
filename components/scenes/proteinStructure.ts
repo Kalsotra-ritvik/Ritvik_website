@@ -4,7 +4,7 @@ import type { ProteinMode, VisualSettings } from "@/lib/content/schema";
 import type { StructureData, Vec3 } from "@/lib/science/structure";
 import {
   bondInstances,
-  gaussianSurface,
+  gaussianSurfaceAsync,
   mergeGeometries,
   moleculeMaterial,
   ribbonGeometry,
@@ -128,9 +128,12 @@ export function createProteinStructure(data: StructureData, quality: "high" | "l
 
   // ---- Surface (built on first use) ----------------------------------------------------
   let surface: THREE.Mesh | null = null;
+  let surfacePending: Promise<void> | null = null;
+  let disposed = false;
   const surfaceMat = moleculeMaterial({ roughness: 0.55, clearcoat: 0.15 });
   const pocketTint = ligandColor.clone().lerp(new THREE.Color(0xffffff), 0.15);
-  function buildSurface() {
+  function buildSurface(): Promise<void> {
+    if (surfacePending) return surfacePending;
     const points: DensityPoint[] = [];
     if (data.heavy) {
       // All heavy atoms: a Gaussian molecular surface with atomic-scale texture.
@@ -154,13 +157,22 @@ export function createProteinStructure(data: StructureData, quality: "high" | "l
         }
       }
     }
-    const geometry = data.heavy
-      ? gaussianSurface(points, { sigma: 0.15, iso: 0.42, resolution: high ? 112 : 72, pad: 0.5 })
-      : gaussianSurface(points, { sigma: 0.26, iso: 0.5, resolution: high ? 100 : 64, pad: 0.6 });
-    surface = new THREE.Mesh(geometry, surfaceMat);
-    surface.name = "protein-surface";
-    group.add(surface);
+    const opts = data.heavy ? { sigma: 0.15, iso: 0.42, resolution: high ? 112 : 80, pad: 0.5 } : { sigma: 0.26, iso: 0.5, resolution: high ? 100 : 64, pad: 0.6 };
+    // Computed in a worker so the page stays responsive.
+    surfacePending = gaussianSurfaceAsync(points, opts).then(
+      (geometry) => {
+        if (disposed) return geometry.dispose();
+        surface = new THREE.Mesh(geometry, surfaceMat);
+        surface.name = "protein-surface";
+        surface.visible = false;
+        group.add(surface);
+        onReady?.();
+      },
+      (err) => console.warn("Protein surface unavailable:", err),
+    );
+    return surfacePending;
   }
+  let onReady: (() => void) | null = null;
 
   const centroid = new THREE.Vector3();
   ligAtoms.forEach((a) => centroid.add(a.p));
@@ -168,10 +180,12 @@ export function createProteinStructure(data: StructureData, quality: "high" | "l
 
   /** Fade representations; `w` is the eased weight of each viewer mode, `on` the overall visibility. */
   function update(w: MeshWeights, on: number) {
-    if (on * w.surface > 0.01 && !surface) buildSurface();
+    if (on * w.surface > 0.01 && !surface) void buildSurface();
+    // Until the surface is ready, the cartoon stands in for it.
+    const pendingSurface = surface ? 0 : w.surface;
     // Binding-site view: the cartoon stays as faint, desaturated context.
     const siteCartoon = 0.2 * w.site;
-    setFade(cartoon, cartoonMat, on * Math.min(1, w.cartoon + siteCartoon));
+    setFade(cartoon, cartoonMat, on * Math.min(1, w.cartoon + siteCartoon + pendingSurface));
     cartoonMat.color.setScalar(1 - 0.45 * w.site * (1 - w.cartoon));
     setFade(trace, traceMat, on * w.trace);
     setFade(traceBeads, traceBeadMat, on * w.trace);
@@ -189,11 +203,13 @@ export function createProteinStructure(data: StructureData, quality: "high" | "l
     group,
     ligandCentroid: centroid,
     update,
-    /** Build the surface ahead of time (call when idle). */
-    prepareSurface() {
-      if (!surface) buildSurface();
+    /** Build the surface ahead of time; `ready` is called when it can be shown. */
+    prepareSurface(ready?: () => void) {
+      onReady = ready ?? null;
+      if (!surface) void buildSurface();
     },
     dispose() {
+      disposed = true;
       group.traverse((o) => {
         const m = o as THREE.Mesh;
         m.geometry?.dispose();

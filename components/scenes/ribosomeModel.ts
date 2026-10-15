@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { assetUrl } from "@/lib/assets";
-import { gaussianSurface, moleculeMaterial, setFade, type DensityPoint } from "@/components/molecular/meshes";
+import { gaussianSurfaceAsync, moleculeMaterial, setFade, type DensityPoint } from "@/components/molecular/meshes";
 
 /**
  * Human 80S ribosome surfaces from PDB 4UG0 (see scripts/build-ribosome.mjs).
@@ -39,15 +39,16 @@ function points(flat: number[], palette: number[] | number): DensityPoint[] {
   return out;
 }
 
-export function createRibosomeModel(data: RibosomeData, quality: "high" | "low") {
+/** Builds both subunit surfaces (in a worker where available). */
+export async function createRibosomeModel(data: RibosomeData, quality: "high" | "low") {
   const high = quality === "high";
   // ~5 Å Gaussian width in scene units, independent of the scale chosen at build time.
   const sigma = 5 * data.source.scale;
   const clip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
 
-  function subunit(rna: number[], protein: number[], rnaColor: number, proteinPalette: number[]) {
+  async function subunit(rna: number[], protein: number[], rnaColor: number, proteinPalette: number[]) {
     const pts = [...points(rna, rnaColor).map((p) => ({ ...p, weight: 1.25 })), ...points(protein, proteinPalette)];
-    const geometry = gaussianSurface(pts, { sigma, iso: 0.85, resolution: high ? 84 : 56, pad: sigma * 3 });
+    const geometry = await gaussianSurfaceAsync(pts, { sigma, iso: 0.85, resolution: high ? 84 : 56, pad: sigma * 3 });
     const material = moleculeMaterial({ roughness: 0.55, clearcoat: 0.15, side: THREE.DoubleSide });
     material.clippingPlanes = [clip];
     material.clipShadows = true;
@@ -67,8 +68,10 @@ export function createRibosomeModel(data: RibosomeData, quality: "high" | "low")
     };
   }
 
-  const small = subunit(data.groups.s40r, data.groups.s40p, RNA_40S, PROTEIN_40S);
-  const large = subunit(data.groups.s60r, data.groups.s60p, RNA_60S, PROTEIN_60S);
+  const [small, large] = await Promise.all([
+    subunit(data.groups.s40r, data.groups.s40p, RNA_40S, PROTEIN_40S),
+    subunit(data.groups.s60r, data.groups.s60p, RNA_60S, PROTEIN_60S),
+  ]);
   return {
     small,
     large,
@@ -80,4 +83,4 @@ export function createRibosomeModel(data: RibosomeData, quality: "high" | "low")
   };
 }
 
-export type RibosomeModel = ReturnType<typeof createRibosomeModel>;
+export type RibosomeModel = Awaited<ReturnType<typeof createRibosomeModel>>;

@@ -7,13 +7,14 @@ import { editableData, getEntry, labelFor, statusOf } from "@/lib/content/servic
 import EntryEditor from "@/components/admin/EntryEditor";
 import { Notice, PageHeader } from "@/components/admin/ui";
 
-type Props = { params: Promise<{ section: string; id: string }> };
+type Props = { params: Promise<{ section: string; id: string }>; searchParams: Promise<{ created?: string }> };
 
 export const metadata: Metadata = { title: "Edit" };
 
-export default async function ItemPage({ params }: Props) {
+export default async function ItemPage({ params, searchParams }: Props) {
   await requireAdmin();
   const { section, id } = await params;
+  const { created } = await searchParams;
   const r = ADMIN_ROUTES[section];
   if (!r || !r.list) notFound();
   const isNew = id === "new";
@@ -43,6 +44,7 @@ export default async function ItemPage({ params }: Props) {
           sections={FORMS[r.collection]}
           isList
           previewAnchor={slug}
+          initialNotice={created ? "Draft saved." : undefined}
         />
       )}
     </>

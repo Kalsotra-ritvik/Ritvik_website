@@ -223,27 +223,35 @@ export function createDNA({ basePairs, quality, sequence: given, seed = 42, styl
   // Lit meshes read the strand colours directly (no silver tint, which the lighting already supplies).
   const pureStrands = [color(coding), color(template)];
   const smooth = style === "beads" ? null : createSmoothDNA(basePairs, sequence, pureStrands, uniforms, high);
+  // The particle helix shows until the engine reports the lit meshes compiled (setSmoothReady).
+  let smoothReady = false;
   if (smooth) {
+    smooth.mesh.visible = false;
     group.add(smooth.mesh);
-    beadPoints.visible = false;
-    if (style === "smooth") lineSegments.visible = false;
   }
-  const glowScale = style === "smooth" ? 0.55 : 1;
+  const glowScale = () => (smoothReady && style === "smooth" ? 0.55 : 1);
 
   return {
     group,
     sequence,
     basePairs,
     particleCount: beads.count + glow.count,
+    smoothMesh: smooth?.mesh ?? null,
+    setSmoothReady() {
+      if (!smooth || smoothReady) return;
+      smoothReady = true;
+      beadPoints.visible = false;
+      if (style === "smooth") lineSegments.visible = false;
+    },
     update(s: DNAState) {
       uniforms.uOpen.value = s.open;
       uniforms.uCenter.value = s.center;
       uniforms.uTemplate.value = s.template;
       uniforms.uIntro.value = s.intro;
       beadMaterial.uniforms.uOpacity.value = s.opacity;
-      glowMaterial.uniforms.uOpacity.value = s.opacity * glowScale;
+      glowMaterial.uniforms.uOpacity.value = s.opacity * glowScale();
       lineMaterial.uniforms.uOpacity.value = s.opacity;
-      if (smooth) {
+      if (smooth && smoothReady) {
         const o = s.opacity * s.intro;
         smooth.material.opacity = o;
         smooth.material.transparent = o < 0.999;

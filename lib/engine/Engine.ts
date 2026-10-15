@@ -9,6 +9,7 @@ import { createTranslationScene, type TranslationScene } from "@/components/scen
 import { createProteinScene, type ProteinScene } from "@/components/scenes/proteinScene";
 import { createDust } from "@/components/scenes/dustScene";
 import { createRibosomeModel, loadRibosome } from "@/components/scenes/ribosomeModel";
+import { setMaterialTier } from "@/components/molecular/meshes";
 import { buildGene, type Gene } from "@/lib/science/gene";
 import { loadStructure } from "@/lib/science/structure";
 import { molecularState, GENE_LAYOUT, PHASES, type MolecularState } from "@/lib/story/molecularTimeline";
@@ -18,7 +19,7 @@ import { SCENE_LABELS } from "@/lib/story/labels";
 import { CameraDirector, applyFraming, portraitDistanceScale, vec3, type Shot } from "./camera";
 import { sharedUniforms } from "./materials";
 import type { QualityProfile } from "./quality";
-import type { VisualSettings } from "@/lib/content/schema";
+import type { LabelId, VisualSettings } from "@/lib/content/schema";
 
 export interface EngineOptions {
   canvas: HTMLCanvasElement;
@@ -94,7 +95,7 @@ export class MolecularEngine {
   private unsubscribe: () => void;
   private resizeObserver: ResizeObserver;
   private labelEls = new Map<string, HTMLElement>();
-  private envTexture: THREE.Texture;
+  private envTexture: THREE.Texture | null = null;
   private keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
   private tabHidden = false;
   private onScreen = true;
@@ -114,12 +115,7 @@ export class MolecularEngine {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.localClippingEnabled = true;
     this.renderer.setClearColor(0x000000, 0);
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    const room = new RoomEnvironment();
-    this.envTexture = pmrem.fromScene(room, 0.04).texture;
-    room.dispose();
-    pmrem.dispose();
-    this.scene.environment = this.envTexture;
+    // The environment map is generated after the first frame (see afterFirstFrame).
     this.keyLight.position.set(6, 9, 7);
     this.scene.add(this.keyLight);
     this.applyVisual();
@@ -128,6 +124,7 @@ export class MolecularEngine {
 
     canvas.addEventListener("webglcontextlost", this.onContextLost, false);
 
+    setMaterialTier(profile.quality);
     this.gene = buildGene(GENE_LAYOUT.basePairs, GENE_LAYOUT.txStart);
     this.world = createWorld(this.gene.preMrna.length);
     this.scene.add(this.world.dnaGroup);
@@ -192,7 +189,7 @@ export class MolecularEngine {
     const q = this.opts.profile.quality;
     this.buildSteps = [
       () => {
-        this.transcript = createTranscriptScene(this.world, this.gene, q, this.opts.visual.rnaStyle);
+        this.transcript = createTranscriptScene(this.world, this.gene, q, this.opts.visual.rnaStyle, this.opts.visual.colors.rna);
         this.scene.add(this.transcript.group);
       },
       () => {
@@ -210,14 +207,12 @@ export class MolecularEngine {
       () => {
         if (this.opts.visual.ribosomeStyle !== "surface") return;
         loadRibosome(this.abort.signal)
-          .then((data) => {
+          // The surfaces are computed in a worker.
+          .then((data) => createRibosomeModel(data, q))
+          .then((model) => {
             if (this.disposed || !this.translation) return;
-            // Building the surfaces takes a few tens of milliseconds; do it in an idle slice.
-            idle(() => {
-              if (this.disposed || !this.translation) return;
-              this.translation.useModel(createRibosomeModel(data, q));
-              this.needsRender = true;
-            });
+            this.translation.useModel(model);
+            this.needsRender = true;
           })
           .catch((err) => {
             if ((err as Error).name !== "AbortError") console.warn("Ribosome model unavailable; using the schematic:", err);
@@ -389,6 +384,7 @@ export class MolecularEngine {
         this.firstFrameDone = true;
         story.set({ webgl: "ready" });
         this.opts.onFirstFrame();
+        idle(() => this.afterFirstFrame());
       }
       this.adaptQuality(dt);
     }
@@ -501,7 +497,7 @@ export class MolecularEngine {
   private pointerSmoothed = new THREE.Vector2();
   private projected = new THREE.Vector3();
 
-  private anchorFor(id: string): THREE.Vector3 | null {
+  private anchorFor(id: LabelId): THREE.Vector3 | null {
     if (!this.transcript || !this.translation || !this.transcriptome) return null;
     const a = this.transcript.anchors;
     const tl = this.translation.anchors;
@@ -531,7 +527,12 @@ export class MolecularEngine {
       case "helix": return p?.helix ?? null;
       case "ligand": return p?.ligand ?? null;
       case "map17": return p?.map17 ?? null;
-      default: return null;
+      case "sglt2": return p?.sglt2 ?? null;
+      default: {
+        // Every label id must have an anchor (checked at compile time).
+        const unhandled: never = id;
+        return unhandled;
+      }
     }
   }
 
@@ -570,6 +571,44 @@ export class MolecularEngine {
     this.updateRunning();
   }
 
+  /**
+   * Work that would delay the first frame: the image-based lighting and the
+   * shaders of the lit DNA meshes. Until they are ready the particle DNA shows.
+   */
+  private afterFirstFrame() {
+    if (this.disposed) return;
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    const room = new RoomEnvironment();
+    this.envTexture = pmrem.fromScene(room, 0.04, 0.1, 100, { size: this.opts.profile.quality === "high" ? 256 : 128 }).texture;
+    room.dispose();
+    pmrem.dispose();
+    this.scene.environment = this.envTexture;
+    const smooth = this.dna.smoothMesh;
+    if (smooth && !this.renderer.extensions.has("KHR_parallel_shader_compile")) {
+      // No asynchronous compilation available: swap after another idle slice.
+      idle(() => {
+        if (this.disposed) return;
+        this.dna.setSmoothReady();
+        this.needsRender = true;
+        this.updateRunning();
+      });
+    } else if (smooth) {
+      smooth.visible = true; // compile() only visits visible objects
+      const pending = this.renderer.compileAsync(smooth, this.camera, this.scene);
+      smooth.visible = false;
+      pending
+        .then(() => {
+          if (this.disposed) return;
+          this.dna.setSmoothReady();
+          this.needsRender = true;
+          this.updateRunning();
+        })
+        .catch(() => this.dna.setSmoothReady());
+    }
+    this.needsRender = true;
+    this.updateRunning();
+  }
+
   /** Settings that map directly onto renderer and material state. */
   private applyVisual() {
     const v = this.opts.visual;
@@ -603,7 +642,7 @@ export class MolecularEngine {
     this.translation?.dispose();
     this.protein?.dispose();
     this.dust.dispose();
-    this.envTexture.dispose();
+    this.envTexture?.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
   }

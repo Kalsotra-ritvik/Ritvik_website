@@ -303,10 +303,22 @@ export function createProteinScene(
     ligand: new THREE.Vector3(),
     map17: new THREE.Vector3(),
     helix: new THREE.Vector3(),
+    sglt2: new THREE.Vector3(),
   };
   const firstModeled = residues.findIndex((r) => r.modeled);
   const longest = runs.reduce((best, r) => (r[1] - r[0] > best[1] - best[0] ? r : best), runs[0]);
   const helixMid = Math.floor((longest[0] + longest[1]) / 2);
+  // SGLT2 label: a resolved residue on the side of the transporter facing away from MAP17.
+  const awayFromMap17 = map17Centroid.clone().negate().normalize();
+  let sglt2Residue = firstModeled;
+  for (let r = 0, best = -Infinity; r < N; r++) {
+    if (!residues[r].modeled) continue;
+    const d = F[r].dot(awayFromMap17);
+    if (d > best) {
+      best = d;
+      sglt2Residue = r;
+    }
+  }
 
   function update(t: number, ms: MolecularState, target: { mode: ViewerMode; yaw: number; pitch: number }, dt: number, instant: boolean) {
     const k = instant ? 1 : Math.min(1, dt * 4);
@@ -354,6 +366,7 @@ export function createProteinScene(
     at(ligandCentroid, anchors.ligand);
     at(map17Centroid, anchors.map17);
     at(P[helixMid], anchors.helix);
+    at(P[sglt2Residue], anchors.sglt2);
   }
 
   return {
@@ -364,8 +377,8 @@ export function createProteinScene(
     contacts: data.contacts,
     update,
     /** Precompute the molecular surface while the browser is idle. */
-    prepare() {
-      structure.prepareSurface();
+    prepare(ready?: () => void) {
+      structure.prepareSurface(ready);
     },
     dispose() {
       structure.dispose();

@@ -125,8 +125,11 @@ function keyFor(collection: CollectionName, data: Record<string, unknown>, exist
   return existing ?? randomUUID().slice(0, 12);
 }
 
-function isUniqueViolation(err: unknown) {
-  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
+function isUniqueViolation(err: unknown): boolean {
+  // Drizzle wraps driver errors; the PostgreSQL code is on the cause.
+  if (typeof err !== "object" || err === null) return false;
+  const e = err as { code?: string; cause?: unknown };
+  return e.code === "23505" || (e.cause !== undefined && isUniqueViolation(e.cause));
 }
 
 // ---------------------------------------------------------------------------
@@ -474,8 +477,10 @@ export async function loadContent(mode: "published" | "draft"): Promise<LoadedCo
   if (!isDatabaseConfigured()) return { content: fallback, source: "defaults", error: "DATABASE_URL is not set." };
   try {
     const db = getDb();
-    const rows = await db.select().from(contentEntries).where(isNull(contentEntries.deletedAt));
-    if (rows.length === 0) return { content: fallback, source: "defaults", error: "The database has no content yet. Run npm run db:seed." };
+    const all = await db.select().from(contentEntries);
+    // Built-in defaults only stand in for a database that was never seeded, not for deleted items.
+    if (all.length === 0) return { content: fallback, source: "defaults", error: "The database has no content yet. Run npm run db:seed." };
+    const rows = all.filter((r) => r.deletedAt == null);
     const content = defaultContent();
     const pick = (r: ContentEntry) => (mode === "published" ? r.publishedData : r.draftData);
 

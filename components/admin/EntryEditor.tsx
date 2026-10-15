@@ -47,6 +47,8 @@ export interface EditorProps {
   isList: boolean;
   /** Section anchor to open in draft preview. */
   previewAnchor?: string;
+  /** Confirmation carried over from a previous page (e.g. after creating an item). */
+  initialNotice?: string;
 }
 
 export default function EntryEditor({
@@ -59,6 +61,7 @@ export default function EntryEditor({
   sections,
   isList,
   previewAnchor,
+  initialNotice,
 }: EditorProps) {
   const router = useRouter();
   const editorId = useId();
@@ -67,7 +70,7 @@ export default function EntryEditor({
   const [data, setData] = useState<Data>(initialData);
   const [saved, setSaved] = useState(() => JSON.stringify(initialData));
   const [issues, setIssues] = useState<Issues>({});
-  const [result, setResult] = useState<ActionResult | null>(null);
+  const [result, setResult] = useState<ActionResult | null>(initialNotice ? { ok: true, message: initialNotice } : null);
   const [formKey, setFormKey] = useState(0);
   const [pending, startTransition] = useTransition();
 
@@ -119,7 +122,8 @@ export default function EntryEditor({
       if (applyResult(r) && r.ok) {
         if (wasNew && r.entry && isList) {
           markDirty(editorId, false);
-          router.replace(`/admin/${route}/${r.entry.id}`);
+          // The new item's own page repeats the confirmation (?created=1).
+          router.replace(`/admin/${route}/${r.entry.id}?created=1`);
         }
         then?.();
       }

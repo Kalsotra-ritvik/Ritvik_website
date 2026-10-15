@@ -1,5 +1,7 @@
 import * as THREE from "three";
-import { MarchingCubes } from "three/examples/jsm/objects/MarchingCubes.js";
+import { computeGaussianSurface, type SurfaceArrays, type SurfaceInput, type SurfaceOptions } from "./gaussianSurface";
+
+export type { SurfaceOptions } from "./gaussianSurface";
 
 /**
  * Mesh builders for structural representations (cartoon ribbons, tubes,
@@ -216,103 +218,83 @@ export interface DensityPoint {
   weight?: number;
 }
 
-/**
- * Gaussian molecular surface: sum of isotropic Gaussians (one per point) on a
- * cubic grid, triangulated with marching cubes at `iso`. With Cα or P atoms as
- * input this gives a coarse-grained envelope, not a solvent-excluded surface.
- */
-export function gaussianSurface(points: DensityPoint[], opts: { sigma: number; iso: number; resolution: number; pad?: number }): THREE.BufferGeometry {
-  const box = new THREE.Box3();
-  points.forEach((pt) => box.expandByPoint(pt.p));
-  const pad = opts.pad ?? opts.sigma * 3;
-  box.expandByScalar(pad);
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-  const half = Math.max(size.x, size.y, size.z) / 2;
-  const R = opts.resolution;
-  const mc = new MarchingCubes(R, new THREE.MeshBasicMaterial(), false, true, 400000);
-  const field = mc.field as Float32Array;
-  const palette = mc.palette as Float32Array;
-  const weightSum = new Float32Array(R * R * R);
-  const voxel = (2 * half) / R;
-  const reach = Math.ceil((opts.sigma * 3) / voxel);
-  const inv2s2 = 1 / (2 * opts.sigma * opts.sigma);
+export function packPoints(points: DensityPoint[], opts: SurfaceOptions): SurfaceInput {
+  const n = points.length;
+  const xyz = new Float32Array(n * 3), rgb = new Float32Array(n * 3), weight = new Float32Array(n);
   const lin = new THREE.Color();
-  // Grid point (x,y,z) sits at world position center + ((x - R/2) / (R/2)) * half (MarchingCubes convention).
-  const toGrid = (v: number, c: number) => ((v - c) / half) * (R / 2) + R / 2;
-  for (const pt of points) {
-    const gx = toGrid(pt.p.x, center.x), gy = toGrid(pt.p.y, center.y), gz = toGrid(pt.p.z, center.z);
+  points.forEach((pt, i) => {
+    xyz.set([pt.p.x, pt.p.y, pt.p.z], i * 3);
     lin.copy(pt.color).convertSRGBToLinear();
-    const w0 = pt.weight ?? 1;
-    const x0 = Math.max(1, Math.floor(gx - reach)), x1 = Math.min(R - 2, Math.ceil(gx + reach));
-    const y0 = Math.max(1, Math.floor(gy - reach)), y1 = Math.min(R - 2, Math.ceil(gy + reach));
-    const z0 = Math.max(1, Math.floor(gz - reach)), z1 = Math.min(R - 2, Math.ceil(gz + reach));
-    for (let z = z0; z <= z1; z++) {
-      const dz = (z - gz) * voxel;
-      for (let y = y0; y <= y1; y++) {
-        const dy = (y - gy) * voxel;
-        const row = R * R * z + R * y;
-        for (let x = x0; x <= x1; x++) {
-          const dx = (x - gx) * voxel;
-          const v = w0 * Math.exp(-(dx * dx + dy * dy + dz * dz) * inv2s2);
-          if (v < 1e-4) continue;
-          const q = row + x;
-          field[q] += v;
-          weightSum[q] += v;
-          palette[q * 3] += lin.r * v;
-          palette[q * 3 + 1] += lin.g * v;
-          palette[q * 3 + 2] += lin.b * v;
-        }
-      }
-    }
-  }
-  for (let q = 0; q < weightSum.length; q++) {
-    const w = weightSum[q];
-    if (w > 0) {
-      palette[q * 3] /= w;
-      palette[q * 3 + 1] /= w;
-      palette[q * 3 + 2] /= w;
-    }
-  }
-  mc.isolation = opts.iso;
-  mc.update();
-  const count = mc.count;
+    rgb.set([lin.r, lin.g, lin.b], i * 3);
+    weight[i] = pt.weight ?? 1;
+  });
+  return { xyz, rgb, weight, opts };
+}
+
+export function surfaceGeometry(a: SurfaceArrays): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
-  const posSrc = mc.positionArray as Float32Array;
-  const norSrc = mc.normalArray as Float32Array;
-  const colSrc = mc.colorArray as Float32Array;
-  const pos = new Float32Array(count * 3);
-  const nor = new Float32Array(count * 3);
-  const col = new Float32Array(count * 3);
-  for (let i = 0; i < count * 3; i += 3) {
-    pos[i] = posSrc[i] * half + center.x;
-    pos[i + 1] = posSrc[i + 1] * half + center.y;
-    pos[i + 2] = posSrc[i + 2] * half + center.z;
-    // MarchingCubes normals are the negative field gradient, i.e. they already point outward.
-    const nx = norSrc[i], ny = norSrc[i + 1], nz = norSrc[i + 2];
-    const l = Math.hypot(nx, ny, nz) || 1;
-    nor[i] = nx / l; nor[i + 1] = ny / l; nor[i + 2] = nz / l;
-    col[i] = colSrc[i]; col[i + 1] = colSrc[i + 1]; col[i + 2] = colSrc[i + 2];
-  }
-  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  g.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
-  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
-  mc.geometry.dispose();
-  (mc.material as THREE.Material).dispose();
+  g.setAttribute("position", new THREE.BufferAttribute(a.position, 3));
+  g.setAttribute("normal", new THREE.BufferAttribute(a.normal, 3));
+  g.setAttribute("color", new THREE.BufferAttribute(a.color, 3));
   return g;
 }
 
-/** Physically based material used by every structural mesh. */
-export function moleculeMaterial(opts: { roughness?: number; clearcoat?: number; color?: number; vertexColors?: boolean; side?: THREE.Side } = {}) {
-  return new THREE.MeshPhysicalMaterial({
-    color: opts.color != null ? linear(opts.color) : 0xffffff,
+let worker: Worker | null = null;
+let nextJob = 0;
+const jobs = new Map<number, { resolve: (a: SurfaceArrays) => void; reject: (e: Error) => void }>();
+
+/**
+ * Build a Gaussian surface off the main thread when workers are available
+ * (falls back to computing in an idle slice otherwise).
+ */
+export function gaussianSurfaceAsync(points: DensityPoint[], opts: SurfaceOptions): Promise<THREE.BufferGeometry> {
+  const input = packPoints(points, opts);
+  if (typeof Worker === "undefined") return Promise.resolve(surfaceGeometry(computeGaussianSurface(input)));
+  if (!worker) {
+    try {
+      worker = new Worker(new URL("./surfaceWorker.ts", import.meta.url), { type: "module" });
+      worker.onmessage = (e: MessageEvent<{ id: number; result?: SurfaceArrays; error?: string }>) => {
+        const job = jobs.get(e.data.id);
+        if (!job) return;
+        jobs.delete(e.data.id);
+        if (e.data.result) job.resolve(e.data.result);
+        else job.reject(new Error(e.data.error ?? "Surface worker failed"));
+      };
+      worker.onerror = () => {
+        for (const job of jobs.values()) job.reject(new Error("Surface worker failed"));
+        jobs.clear();
+      };
+    } catch {
+      return Promise.resolve(surfaceGeometry(computeGaussianSurface(input)));
+    }
+  }
+  const id = nextJob++;
+  return new Promise<SurfaceArrays>((resolve, reject) => {
+    jobs.set(id, { resolve, reject });
+    worker!.postMessage({ id, input }, [input.xyz.buffer, input.rgb.buffer, input.weight.buffer]);
+  }).then(surfaceGeometry);
+}
+
+/** Rendering cost tier for mesh materials (set by the engine from the device profile). */
+let materialTier: "high" | "low" = "high";
+export function setMaterialTier(tier: "high" | "low") {
+  materialTier = tier;
+}
+
+/**
+ * Physically based material used by every structural mesh. High tier adds a
+ * clear-coat layer; low tier uses the cheaper standard model.
+ */
+export function moleculeMaterial(opts: { roughness?: number; clearcoat?: number; color?: number; vertexColors?: boolean; side?: THREE.Side } = {}): THREE.MeshStandardMaterial {
+  const base = {
+    color: opts.color != null ? linear(opts.color) : new THREE.Color(0xffffff),
     vertexColors: opts.vertexColors ?? true,
     roughness: opts.roughness ?? 0.42,
     metalness: 0,
-    clearcoat: opts.clearcoat ?? 0.3,
-    clearcoatRoughness: 0.35,
     side: opts.side ?? THREE.FrontSide,
-  });
+  };
+  if (materialTier === "low") return new THREE.MeshStandardMaterial(base);
+  return new THREE.MeshPhysicalMaterial({ ...base, clearcoat: opts.clearcoat ?? 0.3, clearcoatRoughness: 0.35 });
 }
 
 /**

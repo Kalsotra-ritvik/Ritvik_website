@@ -411,7 +411,7 @@ export const FORMS: Record<CollectionName, FormSection[]> = {
       fields: [
         { kind: "select", name: "dnaStyle", label: "DNA", options: opts(DNA_STYLES, { smooth: "Smooth (tubes and base-pair slabs)", hybrid: "Smooth with fine particle detail", beads: "Beads (original particle style)" }) },
         { kind: "select", name: "rnaStyle", label: "RNA", options: opts(["smooth", "beads"] as const, { smooth: "Smooth tube", beads: "Beads" }) },
-        { kind: "select", name: "ribosomeStyle", label: "Ribosome", options: opts(["surface", "beads"] as const, { surface: "Surface from the structural model", beads: "Schematic beads" }) },
+        { kind: "select", name: "ribosomeStyle", label: "Ribosome", options: opts(["surface", "beads"] as const, { surface: "Surface from the structural model (PDB 4UG0)", beads: "Schematic beads" }), help: "If you choose schematic beads, also update the translation scene note under Scientific text, which describes the deposited model." },
         { kind: "select", name: "proteinMode", label: "Default protein view", options: opts(PROTEIN_MODES, { cartoon: "Cartoon", trace: "Backbone", surface: "Surface", beads: "Beads", site: "Binding site" }) },
       ],
     },
@@ -420,7 +420,7 @@ export const FORMS: Record<CollectionName, FormSection[]> = {
       fields: [
         { kind: "select", name: "lighting", label: "Lighting preset", options: opts(LIGHTING_PRESETS, { studio: "Studio (neutral)", deep: "Deep (higher contrast)", warm: "Warm" }) },
         { kind: "select", name: "cameraPreset", label: "Camera framing", options: opts(CAMERA_PRESETS, { cinematic: "Cinematic (default)", close: "Closer", wide: "Wider" }) },
-        { kind: "slider", name: "bloom", label: "Glow (bloom)", min: 0, max: 1, step: 0.05 },
+        { kind: "slider", name: "bloom", label: "Glow", min: 0, max: 1, step: 0.05, help: "Strength of the soft glow highlights (base-pair nodes, 5′ cap, ligand)." },
       ],
     },
     {
@@ -456,10 +456,10 @@ export const FORMS: Record<CollectionName, FormSection[]> = {
           name: "colors",
           label: "Colours",
           fields: [
-            { kind: "color", name: "accent", label: "Accent" },
+            { kind: "color", name: "accent", label: "Accent (buttons, highlights, italic name)" },
             { kind: "color", name: "dnaCoding", label: "DNA coding strand" },
             { kind: "color", name: "dnaTemplate", label: "DNA template strand" },
-            { kind: "color", name: "rna", label: "RNA (exons)" },
+            { kind: "color", name: "rna", label: "RNA (exons of the story transcript)" },
             { kind: "color", name: "sglt2", label: "SGLT2 (surface)" },
             { kind: "color", name: "map17", label: "MAP17" },
             { kind: "color", name: "ligand", label: "Ligand (empagliflozin)" },

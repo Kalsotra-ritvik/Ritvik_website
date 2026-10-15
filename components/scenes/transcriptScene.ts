@@ -16,7 +16,13 @@ const SP_TRANSCRIBE = 0.3;
 const SP_DISPLAY = 0.15;
 export const SP_MRNA = 0.3;
 
-export function createTranscriptScene(world: World, gene: Gene, quality: "high" | "low", rnaStyle: "smooth" | "beads" = "beads") {
+export function createTranscriptScene(
+  world: World,
+  gene: Gene,
+  quality: "high" | "low",
+  rnaStyle: "smooth" | "beads" = "beads",
+  rnaColor?: string,
+) {
   const high = quality === "high";
   const preLen = gene.preMrna.length;
   const polyALen = gene.polyA;
@@ -104,9 +110,10 @@ export function createTranscriptScene(world: World, gene: Gene, quality: "high" 
   const bbColor = new Float32Array(total * 3);
   const baseColor = new Float32Array(total * 3);
   const alpha = new Float32Array(total);
-  const exon = color(PALETTE.rnaExon);
+  const exonHex = rnaColor ? new THREE.Color().setStyle(rnaColor).getHex() : PALETTE.rnaExon;
+  const exon = color(exonHex);
   const intron = color(PALETTE.rnaIntron);
-  const polyA = color(PALETTE.rnaExon, 0xffffff, 0.25);
+  const polyA = color(exonHex, 0xffffff, 0.25);
   const tmpC = new THREE.Color();
 
   // 5′ cap (7-methylguanosine) marker.

@@ -55,6 +55,7 @@ export default function Portfolio({ content, banner }: { content: SiteContent; b
         Skip to content
       </a>
       {banner}
+      <AccentStyle accent={content.visual.colors.accent} />
       <MolecularStage visual={content.visual} labels={content.labels} />
       <Nav items={navItems} order={order} name={content.profile.name} cv={cv} />
       <main id="content">
@@ -85,4 +86,13 @@ function hasContent(content: SiteContent, id: DocumentSectionId) {
     case "credentials":
       return content.credentials.length > 0;
   }
+}
+
+/** Accent colour from the visual settings (validated as #rrggbb, so safe to inline). */
+function AccentStyle({ accent }: { accent: string }) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(accent) || accent.toLowerCase() === "#f0c27a") return null;
+  const n = parseInt(accent.slice(1), 16);
+  const darker = [16, 8, 0].map((shift) => Math.round(((n >> shift) & 255) * 0.88));
+  const hover = `#${darker.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+  return <style>{`:root{--color-amber-300:${accent};--color-amber-400:${hover}}`}</style>;
 }
